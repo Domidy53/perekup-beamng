@@ -1,0 +1,178 @@
+name: Seed PEREKUP community discussions (one-time)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/seed-community-discussions.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  discussions: write
+jobs:
+  create-welcome-discussions:
+    if: github.repository == 'Domidy53/perekup-beamng'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create welcome discussions if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+          from textwrap import dedent
+          
+          repo_full_name = os.environ["TARGET_REPO"]
+          owner, repo_name = repo_full_name.split("/", 1)
+          token = os.environ["GH_TOKEN"]
+          
+          def graphql(query, variables=None):
+              payload = json.dumps({"query": query, "variables": variables or {}}, ensure_ascii=False).encode("utf-8")
+              req = urllib.request.Request(
+                  "https://api.github.com/graphql",
+                  data=payload,
+                  headers={
+                      "Authorization": "Bearer " + token,
+                      "Content-Type": "application/json",
+                      "Accept": "application/vnd.github+json",
+                      "User-Agent": "perekup-one-time-community-setup",
+                  },
+                  method="POST",
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as response:
+                      data = json.load(response)
+              except urllib.error.HTTPError as error:
+                  raise RuntimeError("GitHub API request failed: HTTP " + str(error.code)) from error
+              if data.get("errors"):
+                  raise RuntimeError("GraphQL errors: " + json.dumps(data["errors"], ensure_ascii=False))
+              return data["data"]
+          
+          data = graphql(
+              """query($owner: String!, $name: String!) {
+                repository(owner: $owner, name: $name) {
+                  id
+                  discussionCategories(first: 25) { nodes { id name slug } }
+                  discussions(first: 100) { nodes { title url } }
+                }
+              }""",
+              {"owner": owner, "name": repo_name},
+          )["repository"]
+          if not data:
+              sys.exit("Repository not found or not accessible")
+          
+          categories = {item["name"].casefold(): item for item in data["discussionCategories"]["nodes"]}
+          existing_titles = {item["title"] for item in data["discussions"]["nodes"]}
+          discussions = [
+              {
+                  "category": "General",
+                  "title": "👋 Добро пожаловать в ПЕРЕКУП! / Welcome to PEREKUP!",
+                  "body": dedent("""\
+                  # 🚗 Добро пожаловать!
+          
+                  **ПЕРЕКУП** — задуманный бесплатный open-source мод для **BeamNG.drive**, где ты начинаешь с небольшого гаража, находишь автомобили по объявлениям, осматриваешь, ремонтируешь и перепродаёшь их, постепенно развивая собственное дело.
+          
+                  **Сейчас проект находится на стадии концепции. Играбельной сборки пока нет.** Функции в README — наши планы, не готовые возможности.
+          
+                  В этом разделе можно знакомиться, обсуждать автомобильные игры и делиться впечатлениями. Расскажите, что вам больше всего нравится в симуляторах автомобилей! Пишите по-русски или по-английски.
+          
+                  - [README и описание проекта](https://github.com/Domidy53/perekup-beamng)
+                  - [План разработки](https://github.com/Domidy53/perekup-beamng/blob/main/ROADMAP.md)
+                  - [Предложить название](https://github.com/Domidy53/perekup-beamng/issues/6)
+          
+                  Пожалуйста, уважайте других участников и не публикуйте личные данные.
+          
+                  ---
+          
+                  # 🚗 Welcome!
+          
+                  **PEREKUP** is a planned free, open-source career mod for **BeamNG.drive**: discover used-car listings, inspect cars, repair and resell them, and grow a garage into a business.
+          
+                  **This project is currently a concept. There is no playable release yet.** All features in the README are plans, not completed gameplay.
+          
+                  Say hello, share your favorite automotive-game experiences, and tell us what you'd like from this type of simulator. Russian and English are both welcome!
+          
+                  Please be respectful and don't share personal information.
+                  """),
+              },
+              {
+                  "category": "Ideas",
+                  "title": "💡 Какие игровые механики нужны первыми? / Your most wanted features",
+                  "body": dedent("""\
+                  ## Какие функции вам действительно интересны? 🚗
+          
+                  Мы хотим построить карьерный режим перекупщика для BeamNG.drive, а не просто меню «купить/продать».
+          
+                  **О чём можно рассказать:**
+                  - Поиск объявлений, торг с продавцами и осмотр перед покупкой.
+                  - Поломки, диагностика и небольшие действия при ремонте.
+                  - Доставка купленной машины домой и гараж.
+                  - Репутация, бизнес, персонажи и сюжет.
+          
+                  **Вопрос:** какая *одна* механика сделала бы игру интересной лично для вас? Можно предложить что-то своё.
+          
+                  Это обсуждение идей. Разработка ещё не началась в полном объёме, и предложения не являются обещанием релиза.
+          
+                  ---
+          
+                  ## Which gameplay mechanic matters most to you?
+          
+                  We envision a BeamNG.drive car-flipping career, not just a buy/sell menu. Which *single* feature would make you want to play — inspections and bargaining, realistic faults and repairs, getting cars home, a garage business, NPC stories, or something else?
+          
+                  All ideas welcome in Russian or English. Suggestions are not release commitments.
+                  """),
+              },
+              {
+                  "category": "Announcements",
+                  "title": "📢 ПЕРЕКУП: открываем сообщество / Community is open",
+                  "body": dedent("""\
+                  ## 🚗 Сообщество ПЕРЕКУПА открыто!
+          
+                  Мы опубликовали на GitHub описание бесплатного проекта для **BeamNG.drive**, дорожную карту, документацию и лицензию **GNU GPL v3** для оригинального кода проекта.
+          
+                  **Статус на октябрь 2026 года:** стадия концепции, играбельной версии ещё нет. Сейчас собираем идеи и обратную связь, а не объявляем дату выхода.
+          
+                  - [General — познакомиться и пообщаться](https://github.com/Domidy53/perekup-beamng/discussions/categories/general)
+                  - [Ideas — предложить механику](https://github.com/Domidy53/perekup-beamng/discussions/categories/ideas)
+                  - [Тема для нового названия](https://github.com/Domidy53/perekup-beamng/issues/6)
+                  - [README проекта](https://github.com/Domidy53/perekup-beamng)
+          
+                  Проект будет бесплатным. Поддержка через ссылку в README строго добровольная и не даёт преимуществ.
+          
+                  ---
+          
+                  ## 🚗 The PEREKUP community is open!
+          
+                  Our planned **free, open-source BeamNG.drive** car-flipping career mod now has a public README, roadmap, documentation, and **GPL-3.0** license for original project code.
+          
+                  **Status as of October 2026:** concept stage; no playable release or announced launch date. We are collecting feedback and name suggestions.
+          
+                  Join General to introduce yourself, Ideas to suggest features, or the naming issue to suggest a new title. Donations are entirely optional and do not unlock gameplay advantages.
+                  """),
+              },
+          ]
+          mutation = """mutation($input: CreateDiscussionInput!) {
+            createDiscussion(input: $input) { discussion { url title } }
+          }"""
+          for discussion in discussions:
+              category = categories.get(discussion["category"].casefold())
+              if not category:
+                  print("Category not found, skipping: " + discussion["category"], flush=True)
+                  continue
+              if discussion["title"] in existing_titles:
+                  print("Already exists, skipping: " + discussion["title"], flush=True)
+                  continue
+              response = graphql(mutation, {"input": {
+                  "repositoryId": data["id"],
+                  "categoryId": category["id"],
+                  "title": discussion["title"],
+                  "body": discussion["body"].strip(),
+              }})
+              created = response["createDiscussion"]["discussion"]
+              print("Created: " + created["url"], flush=True)
+              existing_titles.add(discussion["title"])
+          PY
