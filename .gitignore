@@ -1,0 +1,43 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*
+*secrets*.json
+**/private/
+**/local-config/
+
+# Local career profiles and player-generated state
+/user/
+/userdata/
+/saves/
+/savegames/
+/profiles/
+/cache/
+/logs/
+
+# Build, temporary and test artifacts
+/build/
+/dist/
+/tmp/
+/temp/
+/test-output/
+*.zip
+*.7z
+*.rar
+*.bak
+*.log
+*.tmp
+*.pyc
+__pycache__/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# BeamNG user folder should never be committed wholesale
+/BeamNG.drive/
