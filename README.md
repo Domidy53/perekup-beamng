@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/brand/perekup-cover.svg" alt="ПЕРЕКУП / PEREKUP — фанатский концепт автомобильного гаража с Audi RS Avant, VW и RAM, не игровой скриншот" width="100%" />
+  <img src="assets/brand/perekup-cover.svg" alt="ПЕРЕКУП / PEREKUP — фанатский концепт автомобильного гаража с Audi RS6 Avant quattro, VW и RAM, не игровой скриншот" width="100%" />
 </p>
 <p align="center">
   <img src="assets/brand/perekup-logo.svg" alt="PEREKUP project emblem" width="112" />

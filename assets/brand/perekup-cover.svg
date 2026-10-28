@@ -70,7 +70,8 @@
   <ellipse cx="903" cy="459" rx="10" ry="7"/>
 </g>
 <path d="M916 441 L940 441" stroke="#ef364a" stroke-width="5"/>
-<text x="1113" y="435" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#e0d5ef" letter-spacing="1.2">RS AVANT • QUATTRO</text>
+<text x="1088" y="429" font-family="Arial, sans-serif" font-size="18" font-weight="900" fill="#f7f0ff" letter-spacing=".7">AUDI RS6 AVANT</text>
+<text x="1112" y="448" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#c8aafa" letter-spacing="1.5">quattro</text>
 <circle cx="961" cy="475" r="53" fill="#080912" stroke="#8a869e" stroke-width="10"/>
 <circle cx="961" cy="475" r="32" fill="#292a3b" stroke="#d6d5e4" stroke-width="5"/>
 <circle cx="961" cy="475" r="9" fill="#c4a2fa"/>
