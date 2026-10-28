@@ -1,77 +1,153 @@
 # ПЕРЕКУП / PEREKUP 🚗
 
-**Open-source vehicle trading and restoration career project for BeamNG.drive.**  
-**Бесплатный проект симулятора перекупщика, ремонта и автомобильного бизнеса для BeamNG.drive.**
+### Your next car is somebody else's problem.
+**Бесплатный симулятор перекупщика автомобилей для BeamNG.drive — открытый проект с историей, свободой выбора и настоящими последствиями решений.**
 
-> **Status / Статус:** Early planning and development preparation. **No playable release yet.** / Проект в подготовке. **Играбельной сборки пока нет.**
+> **Статус проекта: концепция и подготовка.** Играбельная сборка пока не выпущена. Всё описанное ниже — **план и направление разработки**, а не список уже существующих возможностей.
 
-[Русский](#русский) · [English](#english) · [Roadmap](ROADMAP.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
-
-## Русский
-
-### Идея
-ПЕРЕКУП — отдельный игровой режим в BeamNG.drive: находи объявления, езди осматривать машины, покупай, диагностируй, ремонтируй и перепродавай их. Развивай свой гараж и бизнес, знакомься с персонажами и проходи сюжетные задания **в свободном порядке**, без принудительной линейной кампании.
-
-**Важное:** это концепция и план разработки, а не заявление о готовых функциях.
-
-### План первой играбельной версии — v0.0.1
-- Старт в **East Coast USA** с **$500**, простым гаражом и выбором одной из **трёх подержанных машин**.
-- Наставник-перекупщик знакомит игрока с основами.
-- Обнаружение штатных автомобилей и совместимых установленных автомобильных модов; **чужие машины не включаются в наш архив**.
-- Объявления с изображениями машин, описаниями и предварительной локальной оценкой стоимости.
-- Покупка → осмотр → базовый ремонт → продажа с расчётом прибыли или убытка.
-- Время, календарь, умеренные последствия ошибок и сохранение прогресса.
-- Язык интерфейса и диалогов задаёт игрок; цены и валюта зависят от игрового региона. Первая карта — США, поэтому экономика первой версии в **USD**.
-
-**Совместимость с любым сторонним автомобильным модом не гарантируется.** Если у модели отсутствуют корректные метаданные, изображения или детали, будут предусмотрены проверка и запасные варианты.
-
-### Долгосрочная концепция
-Персонажи с характерами, скрытые дефекты и платные (внутриигровые) отчёты о прошлом автомобиля, магазины и перевозка запчастей, интерактивный ремонт, эвакуаторы, порты и переходы между картами, валютные обменники/банки, предприятия, конкуренты, задания и сюжет. Позже возможно добавление других карт с разрешения их авторов. AI-диалоги NPC — **только возможное будущее расширение**, не часть первой версии.
-
-### Открытость и безопасность
-- **Бесплатно и с открытым исходным кодом.** Добровольные пожертвования могут появиться позже; они не дают игровых преимуществ.
-- Первая версия проектируется **для локальной игры без собственного сервера, телеметрии и регистрации аккаунта**.
-- Не размещайте в Issues, PR или коммитах пароли, токены, личные данные и чужие платные игровые ресурсы.
-- Исходный код проекта лицензируется по **GNU GPL v3** (см. [LICENSE](LICENSE)); права на BeamNG.drive и сторонние моды остаются у соответствующих правообладателей.
-- Проект неофициальный, не связан с BeamNG GmbH и автопроизводителями.
-
-### Кто делает проект
-Идея, решения по игровому дизайну и руководство проектом — **Domidy53**. Для программирования, анализа архитектуры и подготовки материалов используются инструменты искусственного интеллекта. Изменения предполагают проверку человеком и тестирование в игре; AI-генерация сама по себе не гарантирует правильность и безопасность.
-
-### Участие
-Пока не выпущен прототип, приветствуются аккуратно описанные предложения и сообщения об ошибках. Прежде чем присылать код, прочитайте [CONTRIBUTING.md](CONTRIBUTING.md). Уязвимости сообщайте по [SECURITY.md](SECURITY.md), **не публикуя детали атак**.
+**[Русский](#-о-проекте) · [English](#-english) · [План разработки](ROADMAP.md) · [Архитектура](docs/ARCHITECTURE.md) · [Участие](CONTRIBUTING.md)**
 
 ---
 
-## English
+## 🇷🇺 О проекте
 
-### The idea
-PEREKUP is a planned independent BeamNG.drive career experience about buying used vehicles, inspecting them in person, diagnosing issues, repairing them, and reselling them. Build a garage and a business, meet characters, and discover story missions while retaining the freedom to choose your own deals.
+**ПЕРЕКУП** — это задуманный нами отдельный карьерный режим внутри BeamNG.drive. Не просто покупай машину в меню и нажимай «Продать», а действительно **живи жизнью автомобильного перекупщика**.
 
-This repository currently contains **planning and project documentation only**, not a playable mod.
+Ты начинаешь с небольшим количеством денег, тесным гаражом и потрёпанной личной машиной. Находишь объявления, общаешься с владельцами, едешь за автомобилем, проверяешь его состояние, решаешь, стоит ли рисковать, доставляешь домой, ремонтируешь и пытаешься продать с прибылью.
 
-### Planned first playable milestone — v0.0.1
-- Start in **East Coast USA**, with **$500**, a basic garage, and a choice of **three rough used starter vehicles**.
-- A scripted mentor introduces the vehicle market.
-- Discover stock vehicles and compatible vehicles from mods installed by the player; **no third-party vehicle assets bundled**.
-- Listings with vehicle thumbnails, descriptions, and rough offline valuations.
-- Buy → inspect → perform basic repairs → resell; track profit/loss.
-- In-game clock/calendar, moderate difficulty, and persistent career progress.
-- UI/dialogue language follows the player's preference; market currency follows the map's region. The first release targets **USD**.
+**Игрок сам выбирает направление развития.** Выполнять сюжетные задания, искать редкие машины, заниматься дешёвыми автомобилями, развивать мастерскую или построить собственный автосалон — всё это части долгосрочного замысла.
 
-Support for every third-party vehicle mod cannot be guaranteed. Some mods lack usable metadata, thumbnails, or configurations.
+### 🎮 Какой геймплей мы хотим
 
-### Beyond v0.0.1
-NPC personalities, uncertain vehicle history reports, interactive repairs, parts stores, towing, travel between default maps, banks and foreign exchange, a growing business, optional missions, and a grounded story. Community maps would require the authors' permissions. AI-driven NPC dialogue is a **possible future feature**, not an existing one.
+| Система | Что задумано |
+| --- | --- |
+| 🔎 Поиск автомобилей | Объявления с фотографиями, автосалоны, аукционы, частные продавцы, знакомые и случайные предложения |
+| 🚗 Покупка | Личная поездка к продавцу, разговор, осмотр, тест-драйв, диагностика, риск скрытых дефектов и торг |
+| 🛠️ Ремонт | Запчасти, неисправности, гараж, короткие анимации и простые интерактивные действия — без излишне сложного симулятора инструментов |
+| 🚚 Доставка | Исправную машину можно пригнать самому; неисправную — попытаться починить на месте или перевезти эвакуатором |
+| 💸 Продажа | Оценка состояния, затраты, прибыль или убыток; позднее — покупатели с характером, осмотры и переговоры |
+| 📖 История | Наставник, конкуренты, сомнительные сделки, долги, сложные решения и необязательные сюжетные задания |
+| 🏠 Бизнес | Развитие от маленького гаража до мастерской и автосалона с сотрудниками |
+| 🌍 Путешествия | В будущем — поездки между картами через порты и терминалы, местные рынки и банковский обмен валют |
 
-### Open source and safety
-- Free and open-source. Optional donations may be accepted in the future, without pay-to-win benefits.
-- Early releases are designed to work offline without our own server, telemetry, or mandatory accounts.
-- Never submit passwords, API keys, private information, or third-party proprietary assets.
-- Original project source code: **GNU GPL v3** (see [LICENSE](LICENSE)); BeamNG.drive and third-party content retain their respective owners' rights.
-- Unofficial fan project; not affiliated with BeamNG GmbH or car manufacturers.
+### 🧩 Машины — из твоей установки BeamNG
 
-### Authorship and AI assistance
-Project concept, design direction, and maintenance: **Domidy53**. AI tools assist with development, design analysis, and documentation. Changes are intended to be reviewed and tested by people before release; AI-generated output is not assumed correct or secure.
+**В моде не будет жёстко прописанного перечня автомобилей.** Мы планируем обнаруживать доступные легковые машины и внедорожники из базовой игры и **совместимых автомобильных модификаций, установленных конкретным игроком**.
 
-Read [ROADMAP.md](ROADMAP.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [SECURITY.md](SECURITY.md) before participating.
+Поэтому у разных игроков могут быть разные автомобильные рынки. ПЕРЕКУП **не распространяет чужие автомобили** и не требует определённый платный автомобильный мод.
+
+Цены должны быть правдоподобными: редкий дорогой автомобиль не должен стоить копейки только потому, что автор мода не указал стоимость. В первой версии расчёт будет очень примерным; позже появятся справочники реальных моделей, поколения, состояние, история автомобиля и более точная оценка.
+
+В объявлениях планируются **изображения автомобилей**. Сначала будем использовать доступные локальные игровые превью; если их нет — безопасные запасные изображения или создание превью в игре, где это возможно.
+
+### 🌐 Карты, языки и валюта
+
+- **Язык интерфейса и разговоров NPC** задаётся настройками игрока, а не национальностью персонажа.
+- **Страна игровой карты** определяет рынок и валюту сделок: в США — доллары, в Италии — евро.
+- В будущем при поездках между странами игроку потребуется **обменять деньги в игровом банке**; курсы и комиссии станут частью экономики.
+- На первых этапах используем **стандартные карты BeamNG.drive**. Новые пользовательские карты можно рассматривать позже **только с разрешения их авторов**.
+
+### 🏁 Первая играбельная версия — v0.0.1
+
+Главная цель первой версии — **законченный игровой цикл**, а не сотня недоделанных механик.
+
+- Старт на стандартной карте **East Coast USA** через **Free Roam → ПЕРЕКУП → Новая карьера / Продолжить**.
+- **$500 на старте**, маленький гараж, **выбор из трёх доступных потрёпанных стартовых машин**.
+- Небольшое знакомство с наставником-перекупщиком.
+- Базовый каталог из штатных и совместимых модовых автомобилей, простые цены и объявления с превью.
+- Приехать за машиной, купить, осмотреть, провести ограниченный набор ремонтов, продать и увидеть прибыль или убыток.
+- Игровое время: часы, сутки и календарь. Умеренная сложность: ошибки имеют последствия, но их можно исправлять.
+- Локальное сохранение денег, машин, состояния и прогресса. При удалении стороннего автомобильного мода запись о купленной машине должна оставаться, даже если её временно нельзя загрузить.
+
+**В v0.0.1 не обещаем:** полноценный международный банк, путешествия между картами, разумных нейросетевых NPC, поддержку буквально каждого мода, сложные анимации всех ремонтов или законченный большой сюжет. Это следующие этапы.
+
+Подробные задачи и приоритеты: **[ROADMAP.md](ROADMAP.md)**.
+
+### 🧠 Персонажи, задания и будущее
+
+Мы хотим, чтобы продавцы **имели характер**, могли торопить, скрывать проблемы, отказывать в проверках или оказаться надёжными знакомыми. У каждой машины может быть собственная история. **Платный внутриигровой отчёт** иногда помогает, но не гарантирует полной правды.
+
+Система заданий проектируется расширяемой, чтобы добавлять цепочки миссий, побочные истории и события. При достаточном развитии проекта можно изучить **опциональные AI-диалоги NPC**, но **не ценой обязательного сервера, утечки данных или неконтролируемых расходов**. Первая версия будет локальной и офлайновой.
+
+---
+
+## ❤️ Поддержать разработку / Donate
+
+**ПЕРЕКУП будет бесплатным.** Доступ к игровым механикам, обновлениям и исходному коду **не зависит от пожертвований**. Поддержка исключительно добровольная.
+
+Если проект понравится, можно будет помочь с будущими расходами на тестирование, лицензированные материалы, оформление и развитие.
+
+> **Ссылка на добровольный сбор в ЮMoney появится здесь после настройки и проверки платёжной страницы.** Сейчас приём пожертвований через этот README **не подключён**. Мы не публикуем номера личных карт, паспортные данные или платёжные токены.
+
+Пожертвования не являются предзаказом, не дают эксклюзивного контента и не гарантируют сроки релизов. Условия платёжного сервиса и доступные способы оплаты могут отличаться по стране.
+
+---
+
+## 🤝 Сообщество и открытый код
+
+Мы хотим развивать проект **открыто**, выслушивать идеи и принимать качественные исправления от сообщества.
+
+- **[Предложить идею или сообщить об ошибке](https://github.com/Domidy53/perekup-beamng/issues)**
+- **[План работ](ROADMAP.md)** — что делаем сначала и что отложили.
+- **[Как помочь проекту](CONTRIBUTING.md)** — правила Pull Request и использования чужого контента.
+- **[Безопасность](SECURITY.md)** — как конфиденциально сообщать об уязвимостях.
+
+**Исходный код оригинальных материалов проекта** планируется публиковать под **GNU GPL v3** ([LICENSE](LICENSE), после принятия документационного PR). Это разрешает форки и изменения при соблюдении условий лицензии. **Никакие исходные материалы BeamNG.drive или чужих модов не переходят под нашу лицензию.**
+
+ПЕРЕКУП — **неофициальный фанатский проект**, не связанный с BeamNG GmbH или автопроизводителями.
+
+### 👨‍💻 Кто создаёт ПЕРЕКУП
+
+**Идея, игровые решения и руководство проектом:** [Domidy53](https://github.com/Domidy53).
+
+В архитектуре, программировании и документации используются **инструменты искусственного интеллекта**. Это открыто указывается, но всё, что попадёт в играбельный релиз, должно пройти человеческую проверку и тестирование. Мы не выдаём планируемые функции за готовые и не обещаем безошибочность AI-сгенерированного кода.
+
+---
+
+## 🇬🇧 English
+
+### What is PEREKUP?
+
+**PEREKUP** is a planned **free and open-source vehicle flipping and restoration career experience for BeamNG.drive**. It aims to turn the game into a believable used-car trader's life — with a garage, buyers and sellers, vehicle condition, repairs, business progression, optional narrative missions and meaningful financial decisions.
+
+**Status: planning stage. There is no playable release yet.** Descriptions on this page refer to intended features, not completed ones.
+
+### The experience we want to build
+
+You start small. Find a used car listing, travel to meet the owner, inspect and diagnose the vehicle, decide whether the deal is worth it, get the car home by driving or towing, fix what's wrong, then resell it. Make a profit — or learn an expensive lesson.
+
+Over time the vision includes:
+- Photo listings, private sellers, dealerships, auctions, negotiation and hidden defects.
+- A useful garage, repair parts, small repair interactions and vehicle breakdowns.
+- Scripted characters with personalities, competitors, honest and dishonest deals, and **optional story missions**.
+- Business upgrades, more regions, shipping vehicles between maps and **physical foreign-exchange services at banks**.
+- Model-aware vehicle pricing based on real-world values rather than arbitrary metadata.
+
+### Your cars, your vehicle market
+
+The mod will aim to discover **stock vehicles and compatible third-party car/SUV mods installed by each player**. Vehicle assets from other creators **will not be bundled**. Different players can therefore encounter different listings. Compatibility with every third-party mod is not guaranteed.
+
+### The v0.0.1 milestone
+
+- **East Coast USA**, Free Roam entry point, **$500 starting cash**, a basic garage and a choice of **three rough starter vehicles**.
+- A simple scripted mentor, listings with local thumbnails and rough USD price estimation.
+- An initial loop: buy → inspect → make a few basic repairs → sell → track profit or loss.
+- Clock/calendar, moderate difficulty, and offline versioned career saves.
+
+The first milestone does **not** promise cross-map travel, complex repair animations, live AI NPCs, or a full international banking system. More details: [ROADMAP.md](ROADMAP.md).
+
+### Language and regions
+
+NPC dialogue and interface language follow the **player's preferences**. The game's geographic region determines its car market and transaction currency. Later, travelling between regions may require exchanging money in an in-game bank. The first milestone is USD-only on East Coast USA.
+
+### ❤️ Support PEREKUP
+
+PEREKUP will remain **free**; donations will be **strictly optional**, with no exclusive gameplay advantages.
+
+**A verified donation link for supporters in Russia is being prepared. It is not active yet.** Never send payment credentials or personal financial information through public GitHub discussions.
+
+### Open development and credits
+
+Ideas and project direction: **[Domidy53](https://github.com/Domidy53)**. AI tools assist with architecture, code and documentation; contributions and releases still require human review and gameplay testing. See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [ROADMAP.md](ROADMAP.md).
+
+The planned license for **original project source code** is **GNU GPL v3**. Third-party maps, car mods, and BeamNG.drive itself remain under their owners' terms. This is an unofficial project, not affiliated with BeamNG GmbH or any vehicle manufacturer.
