@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/brand/perekup-cover.svg" alt="ПЕРЕКУП / PEREKUP — concept banner showing a car trading and restoration garage" width="100%" />
+  <img src="assets/brand/perekup-cover.svg" alt="ПЕРЕКУП / PEREKUP — фанатский концепт автомобильного гаража с Audi RS Avant, VW и RAM, не игровой скриншот" width="100%" />
 </p>
 <p align="center">
   <img src="assets/brand/perekup-logo.svg" alt="PEREKUP project emblem" width="112" />
@@ -13,6 +13,8 @@
 > **Статус проекта: концепция и подготовка.** Играбельная сборка пока не выпущена. Всё описанное ниже — **план и направление разработки**, а не список уже существующих возможностей.
 >
 > 🎨 **Оформление выше — концепт-арт, а не реальные игровые кадры.** / **Artwork above is concept art, not in-game screenshots.**
+>
+> Изображённые марки и модели — художественные референсы. Проект не связан с Audi, Volkswagen, RAM или BeamNG GmbH и не распространяет их игровые модели. / Brands shown are illustrative only; this is an unofficial fan project with no manufacturer affiliation.
 
 📣 **Помогите выбрать окончательное название!** «ПЕРЕКУП» — пока рабочее имя. [Предлагайте названия и оставляйте комментарии в открытом обсуждении →](https://github.com/Domidy53/perekup-beamng/issues/6) / **Help us name the project!** [Suggest a name or leave feedback →](https://github.com/Domidy53/perekup-beamng/issues/6)
 

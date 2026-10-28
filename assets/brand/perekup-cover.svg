@@ -25,10 +25,13 @@
 <ellipse cx="1064" cy="178" rx="42" ry="10" fill="#ffc47c" opacity=".28" filter="url(#glow)"/>
 <ellipse cx="1421" cy="169" rx="42" ry="10" fill="#ffc47c" opacity=".25" filter="url(#glow)"/>
 <path d="M1061 177 L1029 287 L1102 287Z M1421 163 L1381 287 L1451 287Z" fill="#ffca81" opacity=".045"/>
+<!-- Garage references to Audi, Volkswagen and RAM cars requested by the project owner. -->
 <!-- garage -->
 <path d="M1021 197 L1416 197 L1477 233 L1477 419 L1002 419 L1002 223Z" fill="#151927" stroke="#51516a" stroke-width="7"/>
 <path d="M988 222 L1425 164 L1490 221" fill="none" stroke="#62617f" stroke-width="18" stroke-linejoin="round"/>
 <rect x="1070" y="243" width="275" height="176" rx="3" fill="#0c0e1a" stroke="#6b688b" stroke-width="9"/>
+<rect x="1085" y="211" width="315" height="28" rx="7" fill="#101321" stroke="#6c528f" stroke-width="2"/>
+<text x="1111" y="231" font-family="Arial, sans-serif" font-size="17" font-weight="bold" letter-spacing="2.2" fill="#e5dcff">AUDI   •   VW   •   RAM</text>
 <path d="M1107 246 L1107 419 M1309 246 L1309 419" stroke="#6c6574" stroke-width="7"/>
 <path d="M1076 271 L1335 271" stroke="#f7c186" stroke-opacity=".48" stroke-width="10"/>
 <rect x="1357" y="259" width="80" height="158" fill="#262737" stroke="#514b58" stroke-width="5"/>
@@ -50,15 +53,24 @@
 <path d="M1475 482 L1505 426 L1533 480" fill="none" stroke="#b3a1c3" stroke-width="7"/>
 <!-- purple light under sedan -->
 <ellipse cx="1106" cy="490" rx="268" ry="22" fill="#7048df" opacity=".36" filter="url(#glow)"/>
-<!-- featured foreground silver car -->
+<!-- Featured concept car: an Audi RS6 Avant-inspired sports wagon. Fan concept, no manufacturer affiliation. -->
 <g filter="url(#shadow)">
-<path d="M850 420 L898 393 L950 333 Q982 299 1044 294 L1190 291 Q1248 293 1283 323 L1342 391 L1395 418 Q1422 423 1436 448 L1436 466 Q1434 477 1416 480 L849 480 Q824 477 823 461 L827 442Z" fill="url(#car1)" stroke="#b0a2c3" stroke-width="7"/>
-<path d="M954 387 L990 332 Q1006 317 1051 317 L1176 317 Q1221 319 1244 346 L1280 389Z" fill="#181c2a" stroke="#b0a3c3" stroke-width="6"/>
+<path d="M850 420 L898 393 L950 333 Q982 299 1044 294 L1234 291 Q1286 296 1316 324 L1352 391 L1395 418 Q1422 423 1436 448 L1436 466 Q1434 477 1416 480 L849 480 Q824 477 823 461 L827 442Z" fill="url(#car1)" stroke="#b0a2c3" stroke-width="7"/>
+<path d="M954 387 L990 332 Q1006 317 1051 317 L1216 317 Q1264 319 1287 347 L1311 389Z" fill="#181c2a" stroke="#b0a3c3" stroke-width="6"/>
 <path d="M1007 325 L1058 323 L1058 385 L969 385Z" fill="url(#glass)" opacity=".96"/>
-<path d="M1072 323 L1170 323 Q1213 323 1234 352 L1258 385 L1072 385Z" fill="url(#glass)" opacity=".98"/>
-<path d="M1070 323 L1070 388 M962 395 L1290 394" stroke="#d4c1d9" stroke-width="5" opacity=".55"/>
+<path d="M1072 323 L1210 323 Q1254 323 1278 352 L1297 385 L1072 385Z" fill="url(#glass)" opacity=".98"/>
+<path d="M1070 323 L1070 388 M962 395 L1310 394" stroke="#d4c1d9" stroke-width="5" opacity=".55"/>
 <path d="M851 446 L896 441 M1355 441 L1416 446" stroke="#fff5da" stroke-width="14" stroke-linecap="round"/>
 <path d="M904 460 L1347 460" stroke="#16182b" stroke-width="9"/>
+<!-- Four-ring badge on the front fascia; the concept car is Audi-inspired, not a provided car model -->
+<g stroke="#f3eaff" stroke-width="2.4" fill="none" opacity=".96">
+  <ellipse cx="858" cy="459" rx="10" ry="7"/>
+  <ellipse cx="873" cy="459" rx="10" ry="7"/>
+  <ellipse cx="888" cy="459" rx="10" ry="7"/>
+  <ellipse cx="903" cy="459" rx="10" ry="7"/>
+</g>
+<path d="M916 441 L940 441" stroke="#ef364a" stroke-width="5"/>
+<text x="1113" y="435" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#e0d5ef" letter-spacing="1.2">RS AVANT • QUATTRO</text>
 <circle cx="961" cy="475" r="53" fill="#080912" stroke="#8a869e" stroke-width="10"/>
 <circle cx="961" cy="475" r="32" fill="#292a3b" stroke="#d6d5e4" stroke-width="5"/>
 <circle cx="961" cy="475" r="9" fill="#c4a2fa"/>
@@ -67,6 +79,7 @@
 <circle cx="1326" cy="475" r="9" fill="#c4a2fa"/>
 <path d="M1095 414 L1153 414" stroke="#dbd8e7" stroke-width="5" stroke-linecap="round"/>
 </g>
+<!-- An older VW Golf-inspired compact project car, plus a RAM-like work pickup deeper in the yard. -->
 <!-- older project vehicle -->
 <g opacity=".95">
 <path d="M745 437 L773 406 L808 406 L835 429 L868 438 L880 449 L880 475 L716 475 L714 451Z" fill="url(#car2)" stroke="#bb8b89" stroke-width="4"/>
@@ -74,6 +87,8 @@
 <circle cx="759" cy="473" r="22" fill="#090b11" stroke="#8c7e86" stroke-width="6"/>
 <circle cx="843" cy="473" r="22" fill="#090b11" stroke="#8c7e86" stroke-width="6"/>
 <path d="M716 445 L749 445" stroke="#ffcb82" stroke-width="6"/>
+<circle cx="739" cy="447" r="7" fill="#171827" stroke="#d7d5df" stroke-width="2.5"/>
+<path d="M735 444 L739 450 L744 444" stroke="#fff0e3" stroke-width="1.5" fill="none"/>
 </g>
 <!-- darkness under text -->
 <rect width="920" height="600" fill="url(#leftOverlay)"/>
