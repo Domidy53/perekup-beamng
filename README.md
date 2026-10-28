@@ -81,7 +81,7 @@
 
 ### 💜 [Поддержать проект через ЮMoney](https://yoomoney.ru/fundraise/1L70ELE3VVK.261028)
 
-Это публичная ссылка на добровольный сбор. **Сумму поддержки выбирает сам человек** в пределах правил платёжного сервиса. Пожалуйста, перед переводом убедитесь, что ссылка ведёт именно на страницу сбора «ПЕРЕКУП».
+Это публичная ссылка на добровольный сбор в поддержку разработки «ПЕРЕКУПА». На странице ЮMoney сбор сейчас называется **«Сбор денег на IT-проект»**, а указанная цель — **10 000 ₽**. Название сбора отличается от названия мода — это нормально. **Сумму пожертвования выбирает сам человек** в пределах правил платёжного сервиса; достижение цели не является условием выхода игры.
 
 **Важное:** разработчик указал эту ссылку для проекта; доступность платежей и сведения о получателе на стороне ЮMoney нужно проверять непосредственно на платёжной странице. Не публикуйте личные банковские данные в GitHub.
 
@@ -159,7 +159,7 @@ PEREKUP will remain **free**; donations will be **strictly optional**, with no e
 
 ### 💜 [Donate via YooMoney](https://yoomoney.ru/fundraise/1L70ELE3VVK.261028)
 
-This is the project's public voluntary fundraising link. **Supporters choose their own amount**, within the payment provider's limits. Please check the fundraiser name and recipient details on YooMoney before sending money. Payment methods and country availability may vary. Do not publish payment credentials in GitHub discussions.
+This is a public voluntary fundraising link supporting PEREKUP development. The fundraiser currently appears on YooMoney as **“Сбор денег на IT-проект”** (“Fundraising for an IT project”), with a **10,000 RUB** goal. Its displayed title differs from the mod's working title. **Supporters choose their own amount**, within the provider's limits. Reaching this goal is not a prerequisite for release. Please check the recipient details on YooMoney before donating; payment methods and country availability may vary. Do not publish payment credentials in GitHub discussions.
 
 ### Open development and credits
 
