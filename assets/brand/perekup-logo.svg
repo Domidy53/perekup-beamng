@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+<title id="title">PEREKUP — project logo</title>
+<desc id="desc">A stylized car, wrench, and trade arrows on a violet night-garage emblem. Concept branding for an unofficial BeamNG.drive mod.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#222047"/><stop offset=".54" stop-color="#111425"/><stop offset="1" stop-color="#090d18"/></linearGradient>
+  <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d7c3ff"/><stop offset=".48" stop-color="#905cff"/><stop offset="1" stop-color="#5632d8"/></linearGradient>
+  <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#b5bdd3"/></linearGradient>
+  <linearGradient id="orange" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffb75b"/><stop offset="1" stop-color="#fe762b"/></linearGradient>
+  <filter id="glow"><feGaussianBlur stdDeviation="12"/></filter>
+  <filter id="shadow"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#02040b" flood-opacity=".8"/></filter>
+</defs>
+<rect width="512" height="512" rx="100" fill="url(#bg)"/>
+<circle cx="256" cy="246" r="188" fill="none" stroke="#5f51b4" stroke-width="4" stroke-dasharray="16 14" opacity=".7"/>
+<circle cx="256" cy="246" r="158" fill="#161a2d" stroke="url(#violet)" stroke-width="14" filter="url(#shadow)"/>
+<path d="M119 276 A158 158 0 0 1 366 145" fill="none" stroke="url(#violet)" stroke-width="15" stroke-linecap="round"/>
+<path d="M344 140 L389 143 L370 186" fill="none" stroke="#a982ff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M395 244 A146 146 0 0 1 153 349" fill="none" stroke="url(#orange)" stroke-width="13" stroke-linecap="round"/>
+<path d="M174 353 L131 351 L149 308" fill="none" stroke="#ff9c45" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M139 279 L162 235 Q176 215 206 212 L309 208 Q340 209 351 232 L373 268 L389 276 Q398 282 398 298 L398 324 Q397 334 386 334 L129 334 Q117 333 117 321 L117 294 Q117 282 139 279Z" fill="#111625" stroke="url(#metal)" stroke-width="9" stroke-linejoin="round" filter="url(#shadow)"/>
+<path d="M190 222 L218 181 Q225 173 246 173 L298 174 Q312 175 323 190 L345 223Z" fill="url(#violet)" opacity=".95"/>
+<path d="M201 223 L224 189 L257 189 L257 223Z" fill="#111d37" opacity=".8"/>
+<path d="M269 189 L300 189 Q307 190 315 203 L329 223 L269 223Z" fill="#111d37" opacity=".8"/>
+<path d="M145 285 L193 281 M326 281 L371 285" stroke="#ffb75b" stroke-width="12" stroke-linecap="round"/>
+<path d="M202 302 L312 302" stroke="#b7bed6" stroke-width="7" stroke-linecap="round"/>
+<circle cx="180" cy="333" r="31" fill="#0e1220" stroke="#bfc2d7" stroke-width="12"/><circle cx="180" cy="333" r="9" fill="#9a6cff"/>
+<circle cx="335" cy="333" r="31" fill="#0e1220" stroke="#bfc2d7" stroke-width="12"/><circle cx="335" cy="333" r="9" fill="#9a6cff"/>
+<rect x="193" y="400" width="126" height="8" rx="4" fill="url(#violet)"/>
+<path d="M218 116 L248 116 M263 116 L294 116" stroke="#eeebff" stroke-width="8" stroke-linecap="round" opacity=".65"/>
+</svg>
