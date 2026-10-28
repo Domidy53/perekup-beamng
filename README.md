@@ -91,8 +91,18 @@
 
 ## 🤝 Сообщество и открытый код
 
-**Мы ждём идеи по поводу нового названия проекта!** Предлагайте свои варианты и обсуждайте предложения других пользователей в [открытом Issue №6](https://github.com/Domidy53/perekup-beamng/issues/6). Также можно оставлять отзывы и идеи по будущим механикам в [GitHub Issues](https://github.com/Domidy53/perekup-beamng/issues). Для комментариев нужен GitHub-аккаунт.
+### 💬 Добро пожаловать в сообщество ПЕРЕКУПА!
 
+ПЕРЕКУП — будущий бесплатный карьерный мод для **BeamNG.drive**: поиск автомобилей по объявлениям, осмотр, покупка, ремонт и перепродажа. Сейчас мы на **стадии концепции**: готовой игровой сборки ещё нет. Зато уже можно повлиять на то, какой получится игра.
+
+**Присоединяйтесь к обсуждениям — пишите на русском или английском:**
+
+- **[General — знакомство и общение](https://github.com/Domidy53/perekup-beamng/discussions/categories/general)** — расскажите, что вам интересно в автомобильных играх.
+- **[Ideas — игровые идеи](https://github.com/Domidy53/perekup-beamng/discussions/categories/ideas)** — предложите механику, улучшение или сценарий.
+- **[Предложить новое название](https://github.com/Domidy53/perekup-beamng/issues/6)** — отдельная тема для вариантов названия.
+- **[Все обсуждения](https://github.com/Domidy53/perekup-beamng/discussions)** — вопросы, предложения и новости сообщества.
+
+Для публикации нужен GitHub-аккаунт. Уважайте других участников, не выкладывайте личные данные и не публикуйте чужие игровые модели и музыку без разрешения. Идеи приветствуются, но не означают обещания включить их в релиз.
 
 Мы хотим развивать проект **открыто**, выслушивать идеи и принимать качественные исправления от сообщества.
 
@@ -101,7 +111,7 @@
 - **[Как помочь проекту](CONTRIBUTING.md)** — правила Pull Request и использования чужого контента.
 - **[Безопасность](SECURITY.md)** — как конфиденциально сообщать об уязвимостях.
 
-**Исходный код оригинальных материалов проекта** планируется публиковать под **GNU GPL v3** ([LICENSE](LICENSE), после принятия документационного PR). Это разрешает форки и изменения при соблюдении условий лицензии. **Никакие исходные материалы BeamNG.drive или чужих модов не переходят под нашу лицензию.**
+**Оригинальные материалы проекта** публикуются под лицензией **GNU GPL v3** ([LICENSE](LICENSE)). Это разрешает форки и изменения при соблюдении условий лицензии. **Никакие исходные материалы BeamNG.drive или чужих модов не переходят под нашу лицензию.**
 
 ПЕРЕКУП — **неофициальный фанатский проект**, не связанный с BeamNG GmbH или автопроизводителями.
 
@@ -149,6 +159,19 @@ The first milestone does **not** promise cross-map travel, complex repair animat
 
 NPC dialogue and interface language follow the **player's preferences**. The game's geographic region determines its car market and transaction currency. Later, travelling between regions may require exchanging money in an in-game bank. The first milestone is USD-only on East Coast USA.
 
+### 💬 Welcome to the PEREKUP community!
+
+PEREKUP is a planned **free, open-source BeamNG.drive career mod** about finding, inspecting, fixing and reselling cars. The project is currently **at the concept stage** — there is no playable build yet.
+
+You're welcome to join the conversation in **Russian or English**:
+
+- **[General — say hello](https://github.com/Domidy53/perekup-beamng/discussions/categories/general)** — tell us what you enjoy in car games.
+- **[Ideas — gameplay suggestions](https://github.com/Domidy53/perekup-beamng/discussions/categories/ideas)** — pitch a mechanic, improvement or story scenario.
+- **[Help name the project](https://github.com/Domidy53/perekup-beamng/issues/6)** — suggest an alternative to the working title.
+- **[All Discussions](https://github.com/Domidy53/perekup-beamng/discussions)** — questions and community conversation.
+
+A GitHub account is needed to post. Be respectful, protect personal information, and do not upload third-party vehicle or music assets without permission. Suggestions are welcome but don't guarantee implementation.
+
 ### 💡 Help us pick a name
 
 **PEREKUP is a temporary project title.** We welcome new name ideas and friendly feedback in [our open naming thread](https://github.com/Domidy53/perekup-beamng/issues/6). You can also propose gameplay features or report problems through [GitHub Issues](https://github.com/Domidy53/perekup-beamng/issues). Posting comments requires a GitHub account.
@@ -165,4 +188,4 @@ This is a public voluntary fundraising link supporting PEREKUP development. The 
 
 Ideas and project direction: **[Domidy53](https://github.com/Domidy53)**. AI tools assist with architecture, code and documentation; contributions and releases still require human review and gameplay testing. See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [ROADMAP.md](ROADMAP.md).
 
-The planned license for **original project source code** is **GNU GPL v3**. Third-party maps, car mods, and BeamNG.drive itself remain under their owners' terms. This is an unofficial project, not affiliated with BeamNG GmbH or any vehicle manufacturer.
+The license for **original project source code** is **GNU GPL v3**. Third-party maps, car mods, and BeamNG.drive itself remain under their owners' terms. This is an unofficial project, not affiliated with BeamNG GmbH or any vehicle manufacturer.

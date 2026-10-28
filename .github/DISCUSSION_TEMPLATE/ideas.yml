@@ -1,0 +1,25 @@
+title: "[Идея / Idea] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        🚗 Спасибо за идею для ПЕРЕКУПА! / Thanks for sharing an idea for PEREKUP!
+        Проект пока на стадии концепции. Идеи не гарантируют реализацию.
+        The project is at the concept stage. Suggestions do not guarantee implementation.
+        Пишите по-русски или по-английски. / Russian and English are both welcome.
+  - type: textarea
+    id: idea
+    attributes:
+      label: "Идея / Your idea"
+      description: "Что бы вы хотели видеть в ПЕРЕКУПЕ? / What would you like to see in PEREKUP?"
+      placeholder: "Опишите игровую механику или предложение / Describe a feature or suggestion"
+    validations:
+      required: true
+  - type: textarea
+    id: player-experience
+    attributes:
+      label: "Почему это интересно / Why it matters"
+      description: "Как это сделает игру увлекательнее? / How does this improve the experience?"
+      placeholder: "Необязательно / Optional"
+    validations:
+      required: false

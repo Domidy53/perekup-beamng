@@ -1,0 +1,18 @@
+title: "[Обсуждение / General] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        👋 Добро пожаловать в сообщество ПЕРЕКУПА! / Welcome to the PEREKUP community!
+        Бесплатный мод для BeamNG.drive находится на стадии концепции; играбельной версии пока нет.
+        The free BeamNG.drive mod is currently a concept; there is no playable version yet.
+        Пишите на русском или английском, уважайте собеседников.
+        Please post in Russian or English and be respectful.
+  - type: textarea
+    id: topic
+    attributes:
+      label: "Тема обсуждения / Discussion topic"
+      description: "Что хотите обсудить? / What would you like to talk about?"
+      placeholder: "Вопрос, впечатление, предложение или приветствие / A question, suggestion or hello"
+    validations:
+      required: true
