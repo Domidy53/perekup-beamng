@@ -5,6 +5,8 @@
 
 > **Статус проекта: концепция и подготовка.** Играбельная сборка пока не выпущена. Всё описанное ниже — **план и направление разработки**, а не список уже существующих возможностей.
 
+📣 **Помогите выбрать окончательное название!** «ПЕРЕКУП» — пока рабочее имя. [Предлагайте названия и оставляйте комментарии в открытом обсуждении →](https://github.com/Domidy53/perekup-beamng/issues/6) / **Help us name the project!** [Suggest a name or leave feedback →](https://github.com/Domidy53/perekup-beamng/issues/6)
+
 **[Русский](#-о-проекте) · [English](#-english) · [План разработки](ROADMAP.md) · [Архитектура](docs/ARCHITECTURE.md) · [Участие](CONTRIBUTING.md)**
 
 ---
@@ -85,6 +87,9 @@
 
 ## 🤝 Сообщество и открытый код
 
+**Мы ждём идеи по поводу нового названия проекта!** Предлагайте свои варианты и обсуждайте предложения других пользователей в [открытом Issue №6](https://github.com/Domidy53/perekup-beamng/issues/6). Также можно оставлять отзывы и идеи по будущим механикам в [GitHub Issues](https://github.com/Domidy53/perekup-beamng/issues). Для комментариев нужен GitHub-аккаунт.
+
+
 Мы хотим развивать проект **открыто**, выслушивать идеи и принимать качественные исправления от сообщества.
 
 - **[Предложить идею или сообщить об ошибке](https://github.com/Domidy53/perekup-beamng/issues)**
@@ -139,6 +144,10 @@ The first milestone does **not** promise cross-map travel, complex repair animat
 ### Language and regions
 
 NPC dialogue and interface language follow the **player's preferences**. The game's geographic region determines its car market and transaction currency. Later, travelling between regions may require exchanging money in an in-game bank. The first milestone is USD-only on East Coast USA.
+
+### 💡 Help us pick a name
+
+**PEREKUP is a temporary project title.** We welcome new name ideas and friendly feedback in [our open naming thread](https://github.com/Domidy53/perekup-beamng/issues/6). You can also propose gameplay features or report problems through [GitHub Issues](https://github.com/Domidy53/perekup-beamng/issues). Posting comments requires a GitHub account.
 
 ### ❤️ Support PEREKUP
 
