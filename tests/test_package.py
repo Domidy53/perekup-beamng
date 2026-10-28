@@ -45,6 +45,9 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(app["directive"], "perekupApp")
             self.assertEqual(app["domElement"], "<perekup-app></perekup-app>")
             self.assertIn("directive('perekupApp'", script)
+            self.assertIn("track by car.id", script)
+            self.assertNotIn("track by car.key", script)
+            self.assertIn("Физическое появление машин и ремонт повреждений пока не подключены", script)
 
 
 if __name__ == "__main__":

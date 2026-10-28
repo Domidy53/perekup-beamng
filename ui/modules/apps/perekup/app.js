@@ -45,7 +45,7 @@ angular.module('beamng.apps').directive('perekupApp', function () {
             <strong>Машины не найдены</strong>
             <span>Убедитесь, что уровень East Coast USA загружен и каталог автомобилей готов.</span>
           </div>
-          <article class="perekup-card perekup-starter" ng-repeat="car in snapshot.starterOptions track by car.key">
+          <article class="perekup-card perekup-starter" ng-repeat="car in snapshot.starterOptions track by car.id">
             <div class="perekup-card-title"><strong ng-bind="car.displayName"></strong><span ng-bind="car.type"></span></div>
             <div class="perekup-card-meta">Конфигурация: <span ng-bind="car.configName"></span> · ID модели: <code ng-bind="car.modelKey"></code></div>
             <button class="perekup-primary" ng-click="startCareer(car.id)">Выбрать машину</button>
@@ -56,6 +56,7 @@ angular.module('beamng.apps').directive('perekupApp', function () {
         </div>
 
         <div class="perekup-active" ng-if="snapshot.status === 'active' && careerOpen">
+          <div class="perekup-warning" role="note">Прототип: сделки обновляют карьерный баланс и записи гаража. Физическое появление машин и ремонт повреждений пока не подключены.</div>
           <nav class="perekup-tabs" aria-label="Разделы карьеры">
             <button ng-class="{selected: tab === 'overview'}" ng-click="setTab('overview')">Дело</button>
             <button ng-class="{selected: tab === 'market'}" ng-click="setTab('market')">Объявления</button>
