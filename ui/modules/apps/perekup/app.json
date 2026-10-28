@@ -1,0 +1,15 @@
+{
+  "name": "PEREKUP Career",
+  "author": "PEREKUP contributors",
+  "version": "0.0.1",
+  "description": "Local vehicle trading career for Free Roam",
+  "directive": "perekupApp",
+  "domElement": "<perekup-app></perekup-app>",
+  "css": {
+    "width": "420px",
+    "height": "560px",
+    "top": "80px",
+    "left": "40px"
+  },
+  "preserveAspectRatio": false
+}
