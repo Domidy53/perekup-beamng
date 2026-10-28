@@ -79,7 +79,11 @@
 
 Если проект понравится, можно будет помочь с будущими расходами на тестирование, лицензированные материалы, оформление и развитие.
 
-> **Ссылка на добровольный сбор в ЮMoney появится здесь после настройки и проверки платёжной страницы.** Сейчас приём пожертвований через этот README **не подключён**. Мы не публикуем номера личных карт, паспортные данные или платёжные токены.
+### 💜 [Поддержать проект через ЮMoney](https://yoomoney.ru/fundraise/1L70ELE3VVK.261028)
+
+Это публичная ссылка на добровольный сбор. **Сумму поддержки выбирает сам человек** в пределах правил платёжного сервиса. Пожалуйста, перед переводом убедитесь, что ссылка ведёт именно на страницу сбора «ПЕРЕКУП».
+
+**Важное:** разработчик указал эту ссылку для проекта; доступность платежей и сведения о получателе на стороне ЮMoney нужно проверять непосредственно на платёжной странице. Не публикуйте личные банковские данные в GitHub.
 
 Пожертвования не являются предзаказом, не дают эксклюзивного контента и не гарантируют сроки релизов. Условия платёжного сервиса и доступные способы оплаты могут отличаться по стране.
 
@@ -153,7 +157,9 @@ NPC dialogue and interface language follow the **player's preferences**. The gam
 
 PEREKUP will remain **free**; donations will be **strictly optional**, with no exclusive gameplay advantages.
 
-**A verified donation link for supporters in Russia is being prepared. It is not active yet.** Never send payment credentials or personal financial information through public GitHub discussions.
+### 💜 [Donate via YooMoney](https://yoomoney.ru/fundraise/1L70ELE3VVK.261028)
+
+This is the project's public voluntary fundraising link. **Supporters choose their own amount**, within the payment provider's limits. Please check the fundraiser name and recipient details on YooMoney before sending money. Payment methods and country availability may vary. Do not publish payment credentials in GitHub discussions.
 
 ### Open development and credits
 
