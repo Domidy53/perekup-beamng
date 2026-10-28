@@ -1,32 +1,63 @@
-# Security Policy / Политика безопасности
+# Политика безопасности / Security Policy
 
-## Supported versions / Поддерживаемые версии
-There is **no published playable release** yet. Security issues in the repository, documentation, future tooling, or test builds are still welcome.
+**Русский ниже первым. English version follows.**
 
-Играбельных релизов пока нет. Сообщения об уязвимостях будущих сборок и инструментов приветствуются.
+## Русский
 
-## Reporting a vulnerability / Как сообщить об уязвимости
-**Do not post exploit instructions, secrets, private data, or unpatched vulnerabilities in public Issues or Pull Requests.**
+### Поддерживаемые версии
+**Играбельных релизов пока нет.** Тем не менее сообщать о возможных проблемах безопасности документации, инструментов и будущих тестовых сборок можно уже сейчас.
 
-1. If GitHub private vulnerability reporting is available, use the repository's **Security → Report a vulnerability** feature.
-2. If unavailable, open a public issue **without technical exploit details** asking the maintainer to arrange a private reporting channel.
-3. Never post passwords, tokens, authentication cookies, IP addresses of private infrastructure, or personal contact data.
+### Как сообщить об уязвимости
+**Не публикуйте в открытых Issues или Pull Requests пароли, токены, личные данные, инструкции по эксплуатации уязвимостей или подробности ещё не исправленных проблем.**
 
-**Не публикуйте** эксплойты, пароли, токены и личную информацию. При наличии используйте приватное сообщение через вкладку Security; если его нет — создайте Issue с просьбой связаться конфиденциально, без технических деталей.
+1. Если доступна функция **Security → Report a vulnerability**, используйте её для приватного сообщения.
+2. Если она не включена, создайте публичный Issue **без технических подробностей уязвимости** с просьбой согласовать конфиденциальный канал связи.
+3. Никогда не прикладывайте токены, cookies, адреса частной инфраструктуры, пароли или личные контакты.
 
-## Security design / Правила разработки
-- v0.0.1 is designed to run **locally and offline**; no project-operated public backend.
-- No credentials or hidden keys in mod ZIPs, Lua, JavaScript, logs or documentation.
-- No telemetry, device fingerprinting, IP geolocation or silent uploads.
-- Dynamic vehicle discovery is data-driven: do not execute scripts from a listing, a vehicle name, or an untrusted API response.
-- Local save files should be treated as untrusted input and parsed/validated conservatively.
-- Do not automatically run executable contributions from unknown forks.
-- Avoid dangerous GitHub Actions patterns such as running untrusted PR code with elevated credentials.
-- Protect main via PR review workflow; keep Actions default permissions read-only whenever possible.
-- Depend on third-party content only with appropriate permission; do not bundle ripped game assets.
+### Наши правила
+- Ранняя версия должна запускаться **локально и офлайн**: никакого обязательного сервера.
+- Не добавляем ключи доступа в ZIP, Lua, JavaScript, логи и документацию.
+- Не собираем телеметрию, IP-адреса, отпечатки устройств и не отправляем данные игрока без его ведома.
+- Названия машин, данные объявлений и сторонние метаданные **не должны интерпретироваться как команды или исполняемый код**.
+- Сохранения проверяем как потенциально недоверенные данные; ошибочные файлы не должны ломать игру.
+- Не запускаем автоматически непроверенный код из чужих Pull Requests.
+- Не выдаём повышенные права и секреты рабочим процессам GitHub Actions, запущенным непроверенными изменениями.
+- Основная ветка защищена Pull Request; права автоматизаций должны быть минимальными.
+- Не включаем в репозиторий чужие автомобили, карты и файлы игры без соответствующих разрешений.
 
-## AI disclosure
-AI tools may assist development. They are **not** a substitute for reviewing code, checking dependencies and testing. No confidential data should be pasted into public AI prompts or public commits.
+### Использование ИИ
+ИИ помогает разрабатывать мод, но **не заменяет проверку кода, зависимостей и тестирование**. Конфиденциальные данные не должны попадать в открытые промпты, Issue или коммиты.
 
-## No security warranty
-No software can be guaranteed completely secure. Please report defects responsibly.
+### Ограничение гарантий
+Абсолютную безопасность программного обеспечения гарантировать невозможно. Если нашли проблему, сообщите о ней ответственным способом.
+
+---
+
+## English
+
+### Supported versions
+There is **no published playable release** yet. Security concerns about the repository, documentation, future tooling, and test builds can still be reported.
+
+### Reporting vulnerabilities
+**Do not publicly post exploit instructions, credentials, private information or details of unpatched vulnerabilities in Issues or Pull Requests.**
+
+1. If available, use **Security → Report a vulnerability** for private reporting.
+2. Otherwise, open an Issue **without exploit details** asking the maintainer to arrange a confidential reporting channel.
+3. Never submit passwords, authentication cookies, personal contacts, or private infrastructure addresses.
+
+### Security design
+- Initial versions are **local and offline**; no required project-operated backend.
+- No embedded secrets or API keys in shipped code, archives, logs or docs.
+- No telemetry, IP geolocation, device fingerprinting or silent uploads.
+- Treat listing data, vehicle titles and mod metadata as data, **not executable instructions**.
+- Validate local career saves conservatively and fail safely on malformed files.
+- Never automatically execute unreviewed code from outside Pull Requests.
+- Do not expose elevated GitHub Actions credentials to untrusted contributions.
+- Maintain protected main and minimal workflow permissions.
+- Do not bundle proprietary BeamNG.drive or third-party vehicle/map assets without permission.
+
+### AI assistance
+AI can assist development but is **not** a substitute for code review, dependency inspection and in-game testing. Do not publish confidential data in prompts or commits.
+
+### No security warranty
+No software can be guaranteed completely secure. Please report vulnerabilities responsibly.
