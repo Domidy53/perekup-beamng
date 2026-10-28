@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 600" role="img" aria-labelledby="title desc">
+<title id="title">ПЕРЕКУП — концептуальная обложка</title>
+<desc id="desc">Ночной авторынок и гараж: один автомобиль ремонтируется, второй готов к продаже. Тёмный стиль, фиолетовые и янтарные акценты, надпись ПЕРЕКУП. Это иллюстрация концепции, а не кадр из игры.</desc>
+<defs>
+<linearGradient id="sky" x2=".8" y2="1"><stop stop-color="#080c19"/><stop offset=".54" stop-color="#16142b"/><stop offset="1" stop-color="#5a3751"/></linearGradient>
+<radialGradient id="sun"><stop stop-color="#fda55f" stop-opacity=".62"/><stop offset=".6" stop-color="#a8547d" stop-opacity=".23"/><stop offset="1" stop-color="#ac579f" stop-opacity="0"/></radialGradient>
+<linearGradient id="ground" x2="0" y2="1"><stop stop-color="#293042"/><stop offset=".4" stop-color="#141923"/><stop offset="1" stop-color="#070a12"/></linearGradient>
+<linearGradient id="car1" x2="0" y2="1"><stop stop-color="#c9b7db"/><stop offset=".35" stop-color="#615579"/><stop offset=".58" stop-color="#29263b"/><stop offset="1" stop-color="#111522"/></linearGradient>
+<linearGradient id="car2" x2="1" y2="1"><stop stop-color="#d3a17d"/><stop offset=".4" stop-color="#733a45"/><stop offset="1" stop-color="#241b28"/></linearGradient>
+<linearGradient id="purp" x2="1" y2="0"><stop stop-color="#8348ff"/><stop offset=".6" stop-color="#b28cff"/><stop offset="1" stop-color="#f1deff"/></linearGradient>
+<linearGradient id="glass" x2="0" y2="1"><stop stop-color="#4e5067"/><stop offset="1" stop-color="#121828"/></linearGradient>
+<linearGradient id="leftOverlay" x2="1" y2="0"><stop stop-color="#080a16"/><stop offset=".65" stop-color="#0b0c1e" stop-opacity=".96"/><stop offset="1" stop-color="#0b0c1e" stop-opacity="0"/></linearGradient>
+<filter id="glow"><feGaussianBlur stdDeviation="23"/></filter>
+<filter id="shadow"><feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#03030b" flood-opacity=".9"/></filter>
+<pattern id="grid" width="74" height="38" patternUnits="userSpaceOnUse"><path d="M0 38 L74 38" stroke="#b6abd0" stroke-opacity=".08"/><path d="M74 0 L74 38" stroke="#b6abd0" stroke-opacity=".06"/></pattern>
+</defs>
+<!-- landscape and distant mountains -->
+<rect width="1600" height="600" fill="url(#sky)"/>
+<ellipse cx="1214" cy="234" rx="510" ry="330" fill="url(#sun)"/>
+<path d="M0 310 L109 266 L227 288 L351 230 L481 279 L635 208 L743 260 L855 207 L966 265 L1070 217 L1219 256 L1320 188 L1434 257 L1548 197 L1600 225 L1600 408 L0 408Z" fill="#111424" opacity=".78"/>
+<path d="M0 366 L106 330 L245 344 L399 309 L506 341 L657 280 L773 344 L900 289 L1025 344 L1159 296 L1269 333 L1402 276 L1517 314 L1600 286 L1600 403 L0 403Z" fill="#17192a"/>
+<!-- industrial lamps, scenery -->
+<path d="M1148 155 L1148 360 M1495 147 L1495 360" stroke="#323449" stroke-width="9"/>
+<path d="M1148 162 L1064 173 M1495 154 L1421 164" stroke="#4d4967" stroke-width="9"/>
+<ellipse cx="1064" cy="178" rx="42" ry="10" fill="#ffc47c" opacity=".28" filter="url(#glow)"/>
+<ellipse cx="1421" cy="169" rx="42" ry="10" fill="#ffc47c" opacity=".25" filter="url(#glow)"/>
+<path d="M1061 177 L1029 287 L1102 287Z M1421 163 L1381 287 L1451 287Z" fill="#ffca81" opacity=".045"/>
+<!-- garage -->
+<path d="M1021 197 L1416 197 L1477 233 L1477 419 L1002 419 L1002 223Z" fill="#151927" stroke="#51516a" stroke-width="7"/>
+<path d="M988 222 L1425 164 L1490 221" fill="none" stroke="#62617f" stroke-width="18" stroke-linejoin="round"/>
+<rect x="1070" y="243" width="275" height="176" rx="3" fill="#0c0e1a" stroke="#6b688b" stroke-width="9"/>
+<path d="M1107 246 L1107 419 M1309 246 L1309 419" stroke="#6c6574" stroke-width="7"/>
+<path d="M1076 271 L1335 271" stroke="#f7c186" stroke-opacity=".48" stroke-width="10"/>
+<rect x="1357" y="259" width="80" height="158" fill="#262737" stroke="#514b58" stroke-width="5"/>
+<path d="M1370 293 L1421 293 M1370 324 L1421 324 M1370 355 L1421 355" stroke="#816f75" stroke-width="5"/>
+<rect x="1383" y="373" width="30" height="42" fill="#6b4258"/>
+<path d="M1120 375 L1158 309 L1245 309 L1283 375" fill="#303144" stroke="#888ba5" stroke-width="7"/>
+<rect x="1120" y="370" width="178" height="26" rx="10" fill="#221e2d"/>
+<circle cx="1160" cy="398" r="18" fill="#07080d" stroke="#777187" stroke-width="6"/>
+<circle cx="1260" cy="398" r="18" fill="#07080d" stroke="#777187" stroke-width="6"/>
+<!-- ground -->
+<path d="M0 404 Q800 367 1600 406 L1600 600 L0 600Z" fill="url(#ground)"/>
+<path d="M0 410 Q900 397 1600 408" fill="none" stroke="#5a4d65" stroke-opacity=".48" stroke-width="10"/>
+<path d="M755 466 L1570 600 M871 453 L1391 600 M1024 437 L1201 600" stroke="#7d6586" stroke-opacity=".14" stroke-width="4"/>
+<rect y="430" width="1600" height="170" fill="url(#grid)" opacity=".65"/>
+<!-- scattered equipment -->
+<rect x="1416" y="415" width="50" height="60" rx="4" fill="#573345" stroke="#ad6682" stroke-width="4"/>
+<path d="M1424 434 L1456 434 M1424 452 L1456 452" stroke="#c18397" stroke-width="4"/>
+<ellipse cx="1452" cy="489" rx="63" ry="10" fill="#03040a" opacity=".6"/>
+<path d="M1475 482 L1505 426 L1533 480" fill="none" stroke="#b3a1c3" stroke-width="7"/>
+<!-- purple light under sedan -->
+<ellipse cx="1106" cy="490" rx="268" ry="22" fill="#7048df" opacity=".36" filter="url(#glow)"/>
+<!-- featured foreground silver car -->
+<g filter="url(#shadow)">
+<path d="M850 420 L898 393 L950 333 Q982 299 1044 294 L1190 291 Q1248 293 1283 323 L1342 391 L1395 418 Q1422 423 1436 448 L1436 466 Q1434 477 1416 480 L849 480 Q824 477 823 461 L827 442Z" fill="url(#car1)" stroke="#b0a2c3" stroke-width="7"/>
+<path d="M954 387 L990 332 Q1006 317 1051 317 L1176 317 Q1221 319 1244 346 L1280 389Z" fill="#181c2a" stroke="#b0a3c3" stroke-width="6"/>
+<path d="M1007 325 L1058 323 L1058 385 L969 385Z" fill="url(#glass)" opacity=".96"/>
+<path d="M1072 323 L1170 323 Q1213 323 1234 352 L1258 385 L1072 385Z" fill="url(#glass)" opacity=".98"/>
+<path d="M1070 323 L1070 388 M962 395 L1290 394" stroke="#d4c1d9" stroke-width="5" opacity=".55"/>
+<path d="M851 446 L896 441 M1355 441 L1416 446" stroke="#fff5da" stroke-width="14" stroke-linecap="round"/>
+<path d="M904 460 L1347 460" stroke="#16182b" stroke-width="9"/>
+<circle cx="961" cy="475" r="53" fill="#080912" stroke="#8a869e" stroke-width="10"/>
+<circle cx="961" cy="475" r="32" fill="#292a3b" stroke="#d6d5e4" stroke-width="5"/>
+<circle cx="961" cy="475" r="9" fill="#c4a2fa"/>
+<circle cx="1326" cy="475" r="53" fill="#080912" stroke="#8a869e" stroke-width="10"/>
+<circle cx="1326" cy="475" r="32" fill="#292a3b" stroke="#d6d5e4" stroke-width="5"/>
+<circle cx="1326" cy="475" r="9" fill="#c4a2fa"/>
+<path d="M1095 414 L1153 414" stroke="#dbd8e7" stroke-width="5" stroke-linecap="round"/>
+</g>
+<!-- older project vehicle -->
+<g opacity=".95">
+<path d="M745 437 L773 406 L808 406 L835 429 L868 438 L880 449 L880 475 L716 475 L714 451Z" fill="url(#car2)" stroke="#bb8b89" stroke-width="4"/>
+<path d="M772 411 L788 393 L812 393 L835 428 L749 428Z" fill="#182237" stroke="#b3807b" stroke-width="4"/>
+<circle cx="759" cy="473" r="22" fill="#090b11" stroke="#8c7e86" stroke-width="6"/>
+<circle cx="843" cy="473" r="22" fill="#090b11" stroke="#8c7e86" stroke-width="6"/>
+<path d="M716 445 L749 445" stroke="#ffcb82" stroke-width="6"/>
+</g>
+<!-- darkness under text -->
+<rect width="920" height="600" fill="url(#leftOverlay)"/>
+<path d="M64 108 L316 108" stroke="#a177ff" stroke-width="8"/>
+<circle cx="78" cy="76" r="9" fill="#ff994a"/>
+<circle cx="110" cy="76" r="9" fill="#a779ff"/>
+<circle cx="142" cy="76" r="9" fill="#ffffff"/>
+<text x="64" y="204" font-size="105" font-family="Arial, DejaVu Sans, sans-serif" font-weight="900" letter-spacing="4" fill="#f5f2ff">ПЕРЕКУП</text>
+<path d="M68 220 L612 220" stroke="url(#purp)" stroke-width="11" stroke-linecap="round"/>
+<text x="68" y="271" font-size="27" font-family="Arial, sans-serif" font-weight="700" letter-spacing="4" fill="#c8b3ff">BEAMNG.DRIVE • CAREER MOD</text>
+<text x="67" y="341" font-size="35" font-family="Arial, DejaVu Sans, sans-serif" font-weight="700" fill="#fff9ff">ПОКУПАЙ. РЕМОНТИРУЙ. ПРОДАВАЙ.</text>
+<text x="68" y="388" font-size="24" font-family="Arial, sans-serif" fill="#d2d1e2">BUY • RESTORE • SELL • BUILD YOUR GARAGE</text>
+<rect x="67" y="433" width="226" height="47" rx="12" fill="#8959df" fill-opacity=".2" stroke="#a77aff" stroke-width="2"/>
+<text x="86" y="464" font-size="20" font-family="Arial, sans-serif" font-weight="700" letter-spacing="1" fill="#ddcaff">EARLY CONCEPT</text>
+<text x="67" y="556" font-size="19" font-family="Arial, DejaVu Sans, sans-serif" fill="#e4dced">Иллюстрация концепции • Не скриншот из игры</text>
+<!-- accent corner -->
+<path d="M1544 0 L1600 0 L1600 58" fill="none" stroke="#a67bff" stroke-width="12"/>
+</svg>
