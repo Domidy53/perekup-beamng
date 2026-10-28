@@ -1,9 +1,18 @@
+<p align="center">
+  <img src="assets/brand/perekup-cover.svg" alt="ПЕРЕКУП / PEREKUP — concept banner showing a car trading and restoration garage" width="100%" />
+</p>
+<p align="center">
+  <img src="assets/brand/perekup-logo.svg" alt="PEREKUP project emblem" width="112" />
+</p>
+
 # ПЕРЕКУП / PEREKUP 🚗
 
 ### Your next car is somebody else's problem.
 **Бесплатный симулятор перекупщика автомобилей для BeamNG.drive — открытый проект с историей, свободой выбора и настоящими последствиями решений.**
 
 > **Статус проекта: концепция и подготовка.** Играбельная сборка пока не выпущена. Всё описанное ниже — **план и направление разработки**, а не список уже существующих возможностей.
+>
+> 🎨 **Оформление выше — концепт-арт, а не реальные игровые кадры.** / **Artwork above is concept art, not in-game screenshots.**
 
 📣 **Помогите выбрать окончательное название!** «ПЕРЕКУП» — пока рабочее имя. [Предлагайте названия и оставляйте комментарии в открытом обсуждении →](https://github.com/Domidy53/perekup-beamng/issues/6) / **Help us name the project!** [Suggest a name or leave feedback →](https://github.com/Domidy53/perekup-beamng/issues/6)
 
