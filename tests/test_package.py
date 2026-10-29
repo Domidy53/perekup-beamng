@@ -18,6 +18,7 @@ class PackageTests(unittest.TestCase):
             self.assertEqual({name.split("/", 1)[0] for name in names}, {"lua", "scripts", "ui", "LICENSE"})
             self.assertTrue(all(not name.startswith(("vehicles/", "levels/", "art/")) for name in names))
             self.assertTrue(all(item.compress_type == ZIP_STORED for item in archive.infolist()))
+            self.assertTrue(all(item.create_system == 3 for item in archive.infolist()))
 
     def test_package_uses_the_committed_icon_without_regenerating_it(self) -> None:
         source_icon = ROOT / "ui" / "modules" / "apps" / "perekup" / "app.png"
