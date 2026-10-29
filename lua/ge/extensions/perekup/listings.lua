@@ -3,45 +3,43 @@ local Economy = require("perekup/economy")
 local M = {}
 local MAX_LISTINGS = 12
 
-function M.create(configs, day, garageVehicles)
-  local owned = {}
-  for _, vehicle in ipairs(garageVehicles or {}) do
-    if vehicle.status ~= "sold" then
-      owned[vehicle.modelKey .. "|" .. vehicle.configKey] = true
-    end
+function M.create(configs, day)
+  local candidates = {}
+  for _, config in ipairs(configs or {}) do
+    candidates[#candidates + 1] = {
+      config = config,
+      price = Economy.listingPrice(config, day, 35),
+      marketValue = Economy.referenceValue(config)
+    }
   end
-
-  local function collect(includeOwned)
-    local listings = {}
-    for _, config in ipairs(configs or {}) do
-      if includeOwned or not owned[config.modelKey .. "|" .. config.configKey] then
-        local index = #listings + 1
-        listings[index] = {
-          id = string.format("L%d_%03d_%s", day, index, config.id),
-          modelKey = config.modelKey,
-          configKey = config.configKey,
-          configName = config.configName,
-          brand = config.brand,
-          name = config.modelName,
-          displayName = config.displayName,
-          type = config.type,
-          price = Economy.listingPrice(config.id, day),
-          marketValue = Economy.referenceValue(config.id, day),
-          status = "available"
-        }
-        if #listings >= MAX_LISTINGS then
-          break
-        end
-      end
+  table.sort(candidates, function(left, right)
+    if left.price == right.price then
+      return left.config.id < right.config.id
     end
-    return listings
-  end
+    return left.price < right.price
+  end)
 
-  local listings = collect(false)
-  if #listings == 0 and #(configs or {}) > 0 then
-    -- A small installation may have only cars already in the player's garage.
-    -- Keep the market playable by listing a separate used example of that model.
-    listings = collect(true)
+  local listings = {}
+  for index = 1, math.min(MAX_LISTINGS, #candidates) do
+    local candidate = candidates[index]
+    local config = candidate.config
+    listings[index] = {
+      id = string.format("L%d_%03d_%s", day, index, config.id),
+      modelKey = config.modelKey,
+      configKey = config.configKey,
+      configName = config.configName,
+      brand = config.brand,
+      name = config.modelName,
+      displayName = config.displayName,
+      type = config.type,
+      price = candidate.price,
+      marketValue = candidate.marketValue,
+      valueSource = Economy.hasDeclaredValue(config) and "metadata" or "estimate",
+      power = config.power,
+      weight = config.weight,
+      performanceClass = config.performanceClass,
+      status = "available"
+    }
   end
   return listings
 end

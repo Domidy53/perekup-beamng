@@ -78,6 +78,8 @@ function M.start(config, configs)
     day = 1,
     nextVehicleNumber = 2,
     nextTransactionNumber = 1,
+    nextOperationNumber = 1,
+    pendingRepair = nil,
     starterVehicleId = "V1",
     vehicles = {
       {
@@ -91,7 +93,8 @@ function M.start(config, configs)
         type = config.type,
         status = "owned",
         condition = 45,
-        marketValue = Economy.referenceValue(config.id, 1),
+        marketValue = Economy.referenceValue(config),
+        valueSource = Economy.hasDeclaredValue(config) and "metadata" or "estimate",
         purchasePrice = 0,
         repairCost = 0,
         repairUsed = false,
@@ -139,6 +142,10 @@ function M.buy(state, listingId)
     status = "owned",
     condition = 35,
     marketValue = listing.marketValue,
+    valueSource = listing.valueSource,
+    power = listing.power,
+    weight = listing.weight,
+    performanceClass = listing.performanceClass,
     purchasePrice = listing.price,
     repairCost = 0,
     repairUsed = false,
@@ -157,12 +164,70 @@ function M.repair(state, vehicleId)
     return false, "Некорректный автомобиль."
   end
   local vehicle = Garage.findById(state.vehicles, vehicleId)
+  local previousRepairCost = vehicle and vehicle.repairCost or 0
   local ok, err = Repair.perform(state, vehicle)
   if not ok then
     return false, err
   end
-  local cost = Economy.repairCost()
+  local cost = vehicle.repairCost - previousRepairCost
   record(state, "repair", "Базовый ремонт: " .. vehicle.displayName, -cost)
+  return true
+end
+
+function M.beginPhysicalRepair(state, vehicleId, objectId)
+  if state.pendingRepair then
+    return false, "Дождитесь завершения текущего ремонта."
+  end
+  if not safeId(vehicleId) or not integer(tonumber(objectId), 0, MAX_BALANCE) then
+    return false, "Не удалось подтвердить игровую машину для ремонта."
+  end
+  local vehicle = Garage.findById(state.vehicles, vehicleId)
+  if not vehicle or vehicle.status ~= "owned" or vehicle.repairUsed or vehicle.condition >= 100 then
+    return false, "Эту машину сейчас нельзя ремонтировать."
+  end
+  local cost = Economy.repairCost(vehicle)
+  if cost <= 0 or state.money < cost then
+    return false, "Недостаточно денег для ремонта."
+  end
+  local operationNumber = tonumber(state.nextOperationNumber) or 1
+  if not integer(operationNumber, 1, 9999999) then
+    return false, "Достигнут предел идентификаторов операций."
+  end
+  state.nextOperationNumber = operationNumber + 1
+  state.pendingRepair = {
+    token = "R" .. tostring(operationNumber),
+    vehicleId = vehicleId,
+    objectId = tonumber(objectId),
+    cost = cost,
+    conditionAfter = Economy.repairCondition(vehicle.condition),
+    repairCostAfter = vehicle.repairCost + cost
+  }
+  return true, state.pendingRepair.token
+end
+
+function M.completePhysicalRepair(state, token)
+  local pending = state.pendingRepair
+  if type(pending) ~= "table" or pending.token ~= token then
+    return false, "Результат ремонта устарел или уже обработан."
+  end
+  local vehicle = Garage.findById(state.vehicles, pending.vehicleId)
+  if not vehicle or vehicle.status ~= "owned" or vehicle.repairUsed or state.money < pending.cost then
+    return false, "Состояние карьеры изменилось во время ремонта."
+  end
+  state.money = state.money - pending.cost
+  vehicle.condition = pending.conditionAfter
+  vehicle.repairCost = pending.repairCostAfter
+  vehicle.repairUsed = true
+  state.pendingRepair = nil
+  record(state, "repair", "Физический ремонт: " .. vehicle.displayName, -pending.cost)
+  return true
+end
+
+function M.cancelPhysicalRepair(state, token)
+  if type(state.pendingRepair) ~= "table" or state.pendingRepair.token ~= token then
+    return false, "Результат ремонта устарел или уже обработан."
+  end
+  state.pendingRepair = nil
   return true
 end
 
@@ -222,6 +287,9 @@ function M.isValidState(state)
   if not integer(state.nextVehicleNumber, 2, 10000000) or not integer(state.nextTransactionNumber, 2, 10000000) then
     return false
   end
+  if state.nextOperationNumber ~= nil and not integer(state.nextOperationNumber, 1, 10000000) then
+    return false
+  end
   if not safeId(state.starterVehicleId) or type(state.vehicles) ~= "table" or #state.vehicles < 1 or #state.vehicles > 500 then
     return false
   end
@@ -244,6 +312,16 @@ function M.isValidState(state)
   end
   if not vehicleIds[state.starterVehicleId] then
     return false
+  end
+  if state.pendingRepair ~= nil then
+    local pending = state.pendingRepair
+    local vehicle = type(pending) == "table" and Garage.findById(state.vehicles, pending.vehicleId) or nil
+    if type(pending) ~= "table" or not safeId(pending.token) or not safeId(pending.vehicleId)
+      or not integer(pending.objectId, 0, MAX_BALANCE) or not integer(pending.cost, 75, MAX_BALANCE)
+      or not integer(pending.conditionAfter, 0, 100) or not integer(pending.repairCostAfter, 0, MAX_BALANCE)
+      or not vehicle or vehicle.status ~= "owned" or vehicle.repairUsed or state.money < pending.cost then
+      return false
+    end
   end
 
   local listingIds = {}

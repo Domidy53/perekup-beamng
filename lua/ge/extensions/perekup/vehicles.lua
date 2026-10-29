@@ -1,3 +1,5 @@
+local Economy = require("perekup/economy")
+
 local M = {}
 
 local function cleanText(value, fallback, limit)
@@ -17,10 +19,18 @@ end
 
 local function isVehicleType(value)
   if type(value) ~= "string" then
-    return true
+    return false
   end
   local kind = value:lower()
-  return kind ~= "prop" and kind ~= "trailer" and kind ~= "unknown"
+  return kind == "car" or kind == "truck"
+end
+
+local function positiveNumber(value, maximum)
+  local number = tonumber(value)
+  if not number or number ~= number or number <= 0 or number > maximum then
+    return nil
+  end
+  return number
 end
 
 local function makeToken(identity, used)
@@ -53,7 +63,7 @@ function M.discover(rawModels, rawConfigs)
           key = key,
           brand = brand,
           modelName = name,
-          type = cleanText(kind, "Автомобиль", 24)
+          type = kind
         }
       end
     end
@@ -78,10 +88,15 @@ function M.discover(rawModels, rawConfigs)
             modelKey = model.key,
             configKey = configKey,
             configName = configName,
+            configType = cleanText(raw["Config Type"] or raw.ConfigType or raw.configType, "unknown", 24),
             brand = model.brand,
             modelName = model.modelName,
             displayName = model.brand .. " " .. model.modelName .. " · " .. configName,
             type = model.type,
+            value = positiveNumber(raw.Value or raw.value, 50000000),
+            power = positiveNumber(raw.Power or raw.power, 2000),
+            weight = positiveNumber(raw.Weight or raw.weight, 100000),
+            performanceClass = positiveNumber(raw["Performance Class"] or raw.PerformanceClass or raw.performanceClass, 20),
             identity = identity
           }
         end
@@ -122,15 +137,31 @@ function M.findConfigById(configs, configId)
 end
 
 function M.starterOptions(configs)
-  local result, seenModels = {}, {}
+  local perModel = {}
   for _, config in ipairs(configs or {}) do
-    if not seenModels[config.modelKey] then
-      seenModels[config.modelKey] = true
-      result[#result + 1] = config
-      if #result >= 3 then
-        break
-      end
+    local previous = perModel[config.modelKey]
+    local configType = tostring(config.configType or ""):lower()
+    local preferred = configType == "factory" and 0 or 1
+    local price = Economy.referenceValue(config)
+    if not previous or preferred < previous.preferred
+      or (preferred == previous.preferred and price < previous.price)
+      or (preferred == previous.preferred and price == previous.price and config.configKey < previous.config.configKey) then
+      perModel[config.modelKey] = { config = config, preferred = preferred, price = price }
     end
+  end
+  local candidates = {}
+  for _, item in pairs(perModel) do
+    candidates[#candidates + 1] = item
+  end
+  table.sort(candidates, function(left, right)
+    if left.price == right.price then
+      return left.config.modelKey < right.config.modelKey
+    end
+    return left.price < right.price
+  end)
+  local result = {}
+  for index = 1, math.min(3, #candidates) do
+    result[#result + 1] = candidates[index].config
   end
   return result
 end

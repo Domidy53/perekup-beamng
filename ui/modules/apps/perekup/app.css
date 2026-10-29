@@ -32,6 +32,8 @@ perekup-app {
 }
 
 .perekup-header { margin-bottom: 14px; }
+.perekup-header-tools { display: flex; align-items: center; gap: 7px; }
+.perekup-language-select { max-width: 88px; height: 34px; padding: 0 7px; border: 1px solid #3c4653; border-radius: 7px; color: #e6edf5; background: #222a34; font: inherit; }
 .perekup-header h1 { margin: 0; font-size: 23px; letter-spacing: 0.11em; font-weight: 750; }
 .perekup-eyebrow, .perekup-step { color: #edae55; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; }
 .perekup-icon-button { width: 34px; height: 34px; border: 1px solid #3c4653; border-radius: 7px; color: #e6edf5; background: #222a34; font-size: 22px; cursor: pointer; }

@@ -2,7 +2,7 @@
 
 **Русский ниже первым. English version follows.**
 
-> Это **предварительная схема**, а не описание уже готового мода. Точные точки интеграции с BeamNG.drive v0.40.x нужно проверить в игре.
+> Это схема проекта и описание v0.0.1. Адаптер создания и сброса игровых объектов покрыт статическими тестами; совместимость его внутренних игровых API всё ещё нужно подтвердить в актуальной BeamNG.drive.
 
 ## Русский
 
@@ -27,16 +27,16 @@
 | `repairs` | Диагностика и ограниченные операции ремонта |
 | `characters` | Наставник и будущие характеры продавцов |
 | `stories` | Расширяемые задания и события |
-| `world` | Регионы, точки услуг и будущие путешествия |
+| `world` | Связь карьерных записей с игровыми объектами и будущие регионы |
 | `saves` | Сохранения, резервные копии и обновление формата |
 | `ui` | Меню игрока, объявления и фотографии автомобилей |
 
 ### Первый запуск v0.0.1
 1. Игрок выбирает **Free Roam → East Coast USA**.
 2. Открывает интерфейс **ПЕРЕКУП**, выбирает «Новая карьера» или «Продолжить».
-3. Выбирает **одну из трёх** доступных потрёпанных машин и получает **500 $**.
-4. Наставник знакомит игрока с объявлениями; игрок может купить, осмотреть, починить и продать автомобиль.
-5. Локальное сохранение запоминает деньги, собственность и прогресс.
+3. Выбирает одну из доступных машин, получает **500 $**, а стартовая машина появляется в мире.
+4. Игрок может выставить стартовую машину, покупать объявления, вывести купленную машину в мир, вернуть её в гараж, отремонтировать полным физическим сбросом и продать.
+5. Локальное сохранение запоминает деньги, карьерные идентификаторы машин, предложения и историю. Игровые object ID существуют только в текущей сессии.
 
 Отдельная кнопка в главном меню — **возможное будущее улучшение**, не требование первой версии.
 
@@ -47,6 +47,10 @@
 - Нельзя превращать название машины или поле объявления в исполняемую команду.
 - Сохраняем идентификаторы автомобиля и проверенные данные конфигурации. Если мод удалён, запись остаётся **временно недоступной**.
 - Проверяем финансовые операции на двойные покупки, отрицательные балансы и неполные сохранения.
+- До подтверждения физического callback ремонт не списывает деньги; незавершённый ремонт сохраняется и безопасно возобновляется или отменяется.
+- UI App использует отдельные словари `ru`/`en` и хранит выбор языка в настройках приложения.
+- Процент состояния — экономическая оценка, а не чтение фактического повреждения игрового объекта. Подтверждённого публичного Lua API для этой телеметрии мод не использует.
+- Физический ремонт пока означает полный reset физики автомобиля, не починку отдельных деталей.
 - Версионируем сохранения и не удаляем неизвестные данные без предупреждения.
 - Проверяем совместимость после обновлений BeamNG и при работе со сторонними автомобилями.
 
@@ -57,7 +61,7 @@
 
 ## English
 
-> This is an **implementation proposal**, not implemented code. BeamNG.drive v0.40.x integration points still need in-game verification.
+> This describes the v0.0.1 implementation. Static tests cover the object lifecycle and reset adapter; its internal game APIs still require verification in a current BeamNG.drive build.
 
 ### Principles
 - Career logic independent from UI and vehicle catalog.
@@ -80,16 +84,16 @@
 | `repairs` | Inspection and basic repair actions |
 | `characters` | Scripted mentor and future NPC personalities |
 | `stories` | Extensible missions and events |
-| `world` | Regions, points of interest and later inter-map travel |
+| `world` | Career-to-world vehicle objects and future regions |
 | `saves` | Versioned saves, backups and migrations |
 | `ui` | Player menus, advertisements and vehicle previews |
 
 ### First-run experience — v0.0.1
 1. Open **Free Roam → East Coast USA**.
 2. Open the **PEREKUP** UI and choose New Career / Continue.
-3. Select **one of three** compatible rough starter vehicles; start with **$500**.
-4. A mentor introduces the market; buy, inspect, repair and resell a car.
-5. Local saves preserve funds, vehicle ownership and progress.
+3. Select an available starter vehicle, begin with **$500**, and spawn it into the world.
+4. List the starter, buy offers, retrieve a purchased car into the world, return it to the garage, physically reset it, and resell it.
+5. Local saves preserve funds, career vehicle IDs, offers and history. Engine object IDs are session-local.
 
 A custom main-menu entry is a **future option**, not a first-release prerequisite.
 
@@ -100,6 +104,10 @@ Prefer **locally available in-game preview images**; use placeholders or permitt
 - Never execute vehicle names, listing fields or mod metadata as commands.
 - Store stable vehicle identifiers and validated configurations. If a mod disappears, preserve the ownership record as **temporarily unavailable**.
 - Prevent duplicate transactions, negative balances and partial-save corruption.
+- Do not charge for repair until the vehicle Lua VM confirms a physics reset; persist and recover pending operations safely. Retry delayed acknowledgements for a live object without repeating a completed reset or cancelling a possibly completed operation.
+- Keep UI copy in `ru`/`en` dictionaries and persist the selected locale in app settings.
+- Condition percentages are career estimates, not live damage readings. No verified public in-game Lua contract is used to read physical damage.
+- The current physical repair performs a full vehicle physics reset rather than repairing individual parts.
 - Version save schemas and avoid silently deleting unknown data.
 - Review compatibility after game updates and with varying vehicle mods.
 
