@@ -108,6 +108,18 @@ function M.new(adapter)
     return readOk and Career.isValidState(readback) and deepEqual(state, readback)
   end
 
+  local function upgradeLoadedState(state, warning)
+    local upgraded, changed, migrationWarning = Career.upgradeState(state)
+    if changed and not store.save(upgraded, state) then
+      migrationWarning = migrationWarning or ""
+      migrationWarning = migrationWarning .. " Формат обновлён в памяти, но новую копию пока не удалось записать."
+    end
+    if migrationWarning then
+      warning = warning and (warning .. " " .. migrationWarning) or migrationWarning
+    end
+    return upgraded, warning
+  end
+
   function store.load()
     if type(adapter.exists) ~= "function" or type(adapter.read) ~= "function" then
       return nil, "Сохранения недоступны: файловый API игры не найден."
@@ -124,13 +136,13 @@ function M.new(adapter)
     if primaryExists then
       local readOk, state = pcall(adapter.read, SAVE_PATH)
       if readOk and Career.isValidState(state) then
-        return state, nil
+        return upgradeLoadedState(state, nil)
       end
     end
     if backupExists then
       local readOk, state = pcall(adapter.read, BACKUP_PATH)
       if readOk and Career.isValidState(state) then
-        return state, "Резервная копия карьеры восстановлена. Последние действия могли не сохраниться."
+        return upgradeLoadedState(state, "Резервная копия карьеры восстановлена. Последние действия могли не сохраниться.")
       end
     end
     return nil, "Файл карьеры повреждён, а проверенная резервная копия недоступна. Новая карьера заблокирована, чтобы не затереть сохранение."

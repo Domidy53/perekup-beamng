@@ -2,7 +2,7 @@
 
 **Русский ниже первым. English version follows.**
 
-> Это схема проекта и описание v0.0.1. Адаптер создания и сброса игровых объектов покрыт статическими тестами; совместимость его внутренних игровых API всё ещё нужно подтвердить в актуальной BeamNG.drive.
+> Это схема проекта и описание v0.0.1. Статические тесты покрывают карьеру, физический checkpoint и обработку повторных команд. Совместимость внутренних игровых API всё ещё нужно подтвердить в актуальной BeamNG.drive.
 
 ## Русский
 
@@ -36,7 +36,7 @@
 2. Открывает интерфейс **ПЕРЕКУП**, выбирает «Новая карьера» или «Продолжить».
 3. Выбирает одну из доступных машин, получает **500 $**, а стартовая машина появляется в мире.
 4. Игрок может выставить стартовую машину, покупать объявления, вывести купленную машину в мир, вернуть её в гараж, отремонтировать полным физическим сбросом и продать.
-5. Локальное сохранение запоминает деньги, карьерные идентификаторы машин, предложения и историю. Игровые object ID существуют только в текущей сессии.
+5. Локальное сохранение запоминает деньги, конфигурации, физические checkpoint-файлы, предложения и историю. Игровой object ID может измениться; незавершённые операции связываются повторно после восстановления объекта.
 
 Отдельная кнопка в главном меню — **возможное будущее улучшение**, не требование первой версии.
 
@@ -47,7 +47,10 @@
 - Нельзя превращать название машины или поле объявления в исполняемую команду.
 - Сохраняем идентификаторы автомобиля и проверенные данные конфигурации. Если мод удалён, запись остаётся **временно недоступной**.
 - Проверяем финансовые операции на двойные покупки, отрицательные балансы и неполные сохранения.
-- До подтверждения физического callback ремонт не списывает деньги; незавершённый ремонт сохраняется и безопасно возобновляется или отменяется.
+- Реализация разрешает удаление мирового объекта только после проверки файлов конфигурации и Beamstate checkpoint. При выводе сначала создаётся сохранённая конфигурация, затем мод пытается загрузить совместимое физическое состояние; несовместимый файл блокирует вывод, запись владения остаётся.
+- Используем внутренние BeamNG `beamstate.save/load` в формате `v2` только с проверкой модели, каталога автомобиля, конфигурации, узлов, балок и гидравлики. `.pc`-поля `parts`, `vars` и `paints` сохраняются отдельно, потому что Beamstate не сохраняет цвет.
+- До сохранённого checkpoint ремонт не запускается. После reset списываем деньги только когда проверен post-reset файл и карьерная запись подтверждена. Повторные команды используют один токен, а потерянные подтверждения восстанавливаются по файлу.
+- Незавершённый ремонт переживает перезапуск и повторно привязывается к новому игровому ID. Если checkpoint потерян до reset, операция отменяется без списания; если reset уже мог начаться, операция сохраняется и ждёт восстановления машины, чтобы не дать бесплатный ремонт.
 - UI App использует отдельные словари `ru`/`en` и хранит выбор языка в настройках приложения.
 - Процент состояния — экономическая оценка, а не чтение фактического повреждения игрового объекта. Подтверждённого публичного Lua API для этой телеметрии мод не использует.
 - Физический ремонт пока означает полный reset физики автомобиля, не починку отдельных деталей.
@@ -107,7 +110,10 @@ Prefer **locally available in-game preview images**; use placeholders or permitt
 - Do not charge for repair until the vehicle Lua VM confirms a physics reset; persist and recover pending operations safely. Retry delayed acknowledgements for a live object without repeating a completed reset or cancelling a possibly completed operation.
 - Keep UI copy in `ru`/`en` dictionaries and persist the selected locale in app settings.
 - Condition percentages are career estimates, not live damage readings. No verified public in-game Lua contract is used to read physical damage.
-- The current physical repair performs a full vehicle physics reset rather than repairing individual parts.
+- The implementation only deletes a returned world object after verifying the saved config and Beamstate checkpoint. Retrieval spawns that config and attempts to apply the compatible physical checkpoint; this is not an ordinary respawn presented as persistence.
+- Beamstate and several vehicle-manager functions are internal APIs, not a stable official serialization contract. They are guarded, tested with mocks, and still need validation on a current BeamNG.drive PC. Third-party modules may keep state outside Beamstate's serialized packages.
+- The current physical repair performs a full vehicle physics reset rather than repairing individual parts. Career condition remains an estimate.
+- Day-one listings ensure that the starter sale can fund one listed vehicle and its estimated repair reserve, including a lower-condition starter-config offer when necessary.
 - Version save schemas and avoid silently deleting unknown data.
 - Review compatibility after game updates and with varying vehicle mods.
 

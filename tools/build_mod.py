@@ -25,7 +25,7 @@ EXPECTED_FILES = (
     "lua/ge/extensions/perekup/repair.lua",
     "lua/ge/extensions/perekup/vehicles.lua",
     "lua/ge/extensions/perekup/world.lua",
-    "lua/vehicle/extensions/perekup_repair.lua",
+    "lua/vehicle/extensions/perekup_vehicle_state.lua",
     "scripts/perekup/modScript.lua",
     "ui/modules/apps/perekup/app.json",
     "ui/modules/apps/perekup/app.js",

@@ -21,6 +21,53 @@ local function boundedText(value, maximum)
   return type(value) == "string" and #value > 0 and #value <= maximum and value:find("%z") == nil
 end
 
+local function validStatePath(value)
+  return type(value) == "string" and #value <= 160
+    and value:match("^settings/perekup_vehicle_states/[A-Za-z0-9_%-]+%.json$") ~= nil
+end
+
+local function validJsonData(value, depth, seen, budget)
+  budget.count = budget.count + 1
+  if budget.count > 10000 then return false end
+  local kind = type(value)
+  if kind == "nil" or kind == "boolean" then return true end
+  if kind == "number" then return value == value and value ~= math.huge and value ~= -math.huge end
+  if kind == "string" then return #value <= 4096 and value:find("%z") == nil end
+  if kind ~= "table" or depth > 32 or seen[value] then return false end
+  seen[value] = true
+  for key, child in pairs(value) do
+    if type(key) ~= "string" and (type(key) ~= "number" or key ~= math.floor(key)) then
+      seen[value] = nil
+      return false
+    end
+    if not validJsonData(child, depth + 1, seen, budget) then
+      seen[value] = nil
+      return false
+    end
+  end
+  seen[value] = nil
+  return true
+end
+
+local function validConfigSnapshot(snapshot, expectedModel)
+  if type(snapshot) ~= "table" or not safeId(snapshot.model) or snapshot.model ~= expectedModel
+    or type(snapshot.parts) ~= "table" then
+    return false
+  end
+  if snapshot.vars ~= nil and type(snapshot.vars) ~= "table" then return false end
+  if snapshot.paints ~= nil and type(snapshot.paints) ~= "table" then return false end
+  if snapshot.format ~= nil and type(snapshot.format) ~= "string" and type(snapshot.format) ~= "number" then
+    return false
+  end
+  if snapshot.licenseName ~= nil and (type(snapshot.licenseName) ~= "string"
+    or #snapshot.licenseName > 64 or snapshot.licenseName:find("%z") ~= nil) then return false end
+  local allowed = { format = true, model = true, licenseName = true, parts = true, vars = true, paints = true }
+  for key in pairs(snapshot) do
+    if not allowed[key] then return false end
+  end
+  return validJsonData(snapshot, 1, {}, { count = 0 })
+end
+
 local function findById(items, itemId)
   for _, item in ipairs(items or {}) do
     if item.id == itemId then
@@ -72,7 +119,7 @@ function M.start(config, configs)
   end
 
   local state = {
-    schema = 1,
+    schema = 2,
     started = true,
     money = 500,
     day = 1,
@@ -80,6 +127,7 @@ function M.start(config, configs)
     nextTransactionNumber = 1,
     nextOperationNumber = 1,
     pendingRepair = nil,
+    pendingStore = nil,
     starterVehicleId = "V1",
     vehicles = {
       {
@@ -104,7 +152,7 @@ function M.start(config, configs)
     listings = {},
     history = {}
   }
-  state.listings = Listings.create(configs, state.day, state.vehicles)
+  state.listings = Listings.create(configs, state.day, state.vehicles[1])
   record(state, "start", "Начало карьеры и выбор стартового автомобиля", 0)
   return state
 end
@@ -140,7 +188,7 @@ function M.buy(state, listingId)
     displayName = listing.displayName,
     type = listing.type,
     status = "owned",
-    condition = 35,
+    condition = integer(listing.condition, 0, 100) and listing.condition or 35,
     marketValue = listing.marketValue,
     valueSource = listing.valueSource,
     power = listing.power,
@@ -174,7 +222,7 @@ function M.repair(state, vehicleId)
   return true
 end
 
-function M.beginPhysicalRepair(state, vehicleId, objectId)
+function M.beginPhysicalRepair(state, vehicleId, objectId, configSnapshot, preStateFile, postStateFile)
   if state.pendingRepair then
     return false, "Дождитесь завершения текущего ремонта."
   end
@@ -189,6 +237,10 @@ function M.beginPhysicalRepair(state, vehicleId, objectId)
   if cost <= 0 or state.money < cost then
     return false, "Недостаточно денег для ремонта."
   end
+  if not validConfigSnapshot(configSnapshot, vehicle.modelKey)
+    or not validStatePath(preStateFile) or not validStatePath(postStateFile) or preStateFile == postStateFile then
+    return false, "Не удалось безопасно подготовить конфигурацию и физический checkpoint ремонта."
+  end
   local operationNumber = tonumber(state.nextOperationNumber) or 1
   if not integer(operationNumber, 1, 9999999) then
     return false, "Достигнут предел идентификаторов операций."
@@ -198,6 +250,10 @@ function M.beginPhysicalRepair(state, vehicleId, objectId)
     token = "R" .. tostring(operationNumber),
     vehicleId = vehicleId,
     objectId = tonumber(objectId),
+    phase = "checkpoint",
+    configSnapshot = M.copy(configSnapshot),
+    preStateFile = preStateFile,
+    postStateFile = postStateFile,
     cost = cost,
     conditionAfter = Economy.repairCondition(vehicle.condition),
     repairCostAfter = vehicle.repairCost + cost
@@ -205,10 +261,32 @@ function M.beginPhysicalRepair(state, vehicleId, objectId)
   return true, state.pendingRepair.token
 end
 
+function M.startPhysicalRepair(state, token)
+  local pending = state.pendingRepair
+  if type(pending) ~= "table" or pending.token ~= token or pending.phase ~= "checkpoint" then
+    return false, "Checkpoint ремонта устарел или уже обработан."
+  end
+  pending.phase = "reset"
+  return true
+end
+
+function M.attachPhysicalRepairObject(state, token, objectId)
+  local pending = state.pendingRepair
+  if type(pending) ~= "table" or pending.token ~= token or pending.phase ~= "reset"
+    or not integer(tonumber(objectId), 0, MAX_BALANCE) then
+    return false, "Не удалось перепривязать незавершённый ремонт к игровому объекту."
+  end
+  pending.objectId = tonumber(objectId)
+  return true
+end
+
 function M.completePhysicalRepair(state, token)
   local pending = state.pendingRepair
   if type(pending) ~= "table" or pending.token ~= token then
     return false, "Результат ремонта устарел или уже обработан."
+  end
+  if state.schema >= 2 and pending.phase ~= "reset" then
+    return false, "Физический reset нельзя списать до сохранения исходного checkpoint."
   end
   local vehicle = Garage.findById(state.vehicles, pending.vehicleId)
   if not vehicle or vehicle.status ~= "owned" or vehicle.repairUsed or state.money < pending.cost then
@@ -218,8 +296,62 @@ function M.completePhysicalRepair(state, token)
   vehicle.condition = pending.conditionAfter
   vehicle.repairCost = pending.repairCostAfter
   vehicle.repairUsed = true
+  vehicle.configSnapshot = M.copy(pending.configSnapshot)
+  vehicle.beamStateFile = pending.postStateFile
   state.pendingRepair = nil
   record(state, "repair", "Физический ремонт: " .. vehicle.displayName, -pending.cost)
+  return true
+end
+
+function M.beginVehicleStore(state, vehicleId, objectId, configSnapshot, stateFile)
+  if state.pendingStore or state.pendingRepair then
+    return false, "Дождитесь завершения текущей операции с автомобилем."
+  end
+  if not safeId(vehicleId) or not integer(tonumber(objectId), 0, MAX_BALANCE)
+    or not validStatePath(stateFile) then
+    return false, "Не удалось подтвердить автомобиль и путь его физического сохранения."
+  end
+  local vehicle = Garage.findById(state.vehicles, vehicleId)
+  if not vehicle or vehicle.status ~= "owned" or not validConfigSnapshot(configSnapshot, vehicle.modelKey) then
+    return false, "Не удалось прочитать сохранённую конфигурацию игрового автомобиля."
+  end
+  local operationNumber = tonumber(state.nextOperationNumber) or 1
+  if not integer(operationNumber, 1, 9999999) then
+    return false, "Достигнут предел идентификаторов операций."
+  end
+  state.nextOperationNumber = operationNumber + 1
+  local token = "S" .. tostring(operationNumber)
+  state.pendingStore = {
+    token = token,
+    vehicleId = vehicleId,
+    objectId = tonumber(objectId),
+    configSnapshot = M.copy(configSnapshot),
+    stateFile = stateFile
+  }
+  return true, token
+end
+
+function M.completeVehicleStore(state, token)
+  local pending = state.pendingStore
+  if type(pending) ~= "table" or pending.token ~= token then
+    return false, "Результат сохранения автомобиля устарел или уже обработан."
+  end
+  local vehicle = Garage.findById(state.vehicles, pending.vehicleId)
+  if not vehicle or vehicle.status ~= "owned" then
+    return false, "Автомобиль больше не принадлежит карьере."
+  end
+  vehicle.configSnapshot = M.copy(pending.configSnapshot)
+  vehicle.beamStateFile = pending.stateFile
+  state.pendingStore = nil
+  record(state, "garage", "Автомобиль и его физическое состояние сохранены в гараже: " .. vehicle.displayName, 0)
+  return true
+end
+
+function M.cancelVehicleStore(state, token)
+  if type(state.pendingStore) ~= "table" or state.pendingStore.token ~= token then
+    return false, "Результат сохранения автомобиля устарел или уже обработан."
+  end
+  state.pendingStore = nil
   return true
 end
 
@@ -278,7 +410,7 @@ function M.advanceDay(state, configs)
 end
 
 function M.isValidState(state)
-  if type(state) ~= "table" or state.schema ~= 1 or state.started ~= true then
+  if type(state) ~= "table" or (state.schema ~= 1 and state.schema ~= 2) or state.started ~= true then
     return false
   end
   if not integer(state.money, 0, MAX_BALANCE) or not integer(state.day, 1, 10000000) then
@@ -308,6 +440,14 @@ function M.isValidState(state)
       or (vehicle.status ~= "owned" and vehicle.status ~= "for_sale" and vehicle.status ~= "sold") then
       return false
     end
+    if state.schema >= 2 then
+      if vehicle.configSnapshot ~= nil and not validConfigSnapshot(vehicle.configSnapshot, vehicle.modelKey) then
+        return false
+      end
+      if vehicle.beamStateFile ~= nil and (not validStatePath(vehicle.beamStateFile) or vehicle.configSnapshot == nil) then
+        return false
+      end
+    end
     vehicleIds[vehicle.id] = true
   end
   if not vehicleIds[state.starterVehicleId] then
@@ -322,6 +462,24 @@ function M.isValidState(state)
       or not vehicle or vehicle.status ~= "owned" or vehicle.repairUsed or state.money < pending.cost then
       return false
     end
+    if state.schema >= 2 then
+      if (pending.phase ~= "checkpoint" and pending.phase ~= "reset")
+        or not validConfigSnapshot(pending.configSnapshot, vehicle.modelKey)
+        or not validStatePath(pending.preStateFile) or not validStatePath(pending.postStateFile)
+        or pending.preStateFile == pending.postStateFile then
+        return false
+      end
+    end
+  end
+  if state.pendingStore ~= nil then
+    local pending = state.pendingStore
+    local vehicle = type(pending) == "table" and Garage.findById(state.vehicles, pending.vehicleId) or nil
+    if state.schema < 2 or type(pending) ~= "table" or not safeId(pending.token)
+      or not safeId(pending.vehicleId) or not integer(pending.objectId, 0, MAX_BALANCE)
+      or not validStatePath(pending.stateFile) or not vehicle or vehicle.status ~= "owned"
+      or not validConfigSnapshot(pending.configSnapshot, vehicle.modelKey) then
+      return false
+    end
   end
 
   local listingIds = {}
@@ -333,6 +491,7 @@ function M.isValidState(state)
       or (listing.status ~= "available" and listing.status ~= "purchased") then
       return false
     end
+    if listing.condition ~= nil and not integer(listing.condition, 0, 100) then return false end
     if listing.status == "purchased" and not vehicleIds[listing.purchasedVehicleId] then
       return false
     end
@@ -351,5 +510,29 @@ function M.isValidState(state)
   end
   return true
 end
+
+function M.upgradeState(state)
+  if type(state) ~= "table" or state.schema ~= 1 then
+    return state, false, nil
+  end
+  local upgraded = M.copy(state)
+  upgraded.schema = 2
+  upgraded.nextOperationNumber = tonumber(upgraded.nextOperationNumber) or 1
+  upgraded.pendingStore = nil
+  for _, vehicle in ipairs(upgraded.vehicles or {}) do
+    vehicle.configSnapshot = nil
+    vehicle.beamStateFile = nil
+  end
+  local warning
+  if upgraded.pendingRepair then
+    upgraded.pendingRepair = nil
+    record(upgraded, "repair_recovery", "Незавершённый ремонт старого сохранения отменён без списания: в нём нет проверенного физического checkpoint.", 0)
+    warning = "Незавершённый ремонт прежнего формата отменён без списания."
+  end
+  return upgraded, true, warning
+end
+
+M.isValidConfigSnapshot = validConfigSnapshot
+M.isValidStatePath = validStatePath
 
 return M

@@ -31,7 +31,7 @@ class PackageTests(unittest.TestCase):
                 "lua/ge/extensions/perekup/repair.lua",
                 "lua/ge/extensions/perekup/progression.lua",
                 "lua/ge/extensions/perekup/world.lua",
-                "lua/vehicle/extensions/perekup_repair.lua",
+                "lua/vehicle/extensions/perekup_vehicle_state.lua",
                 "ui/modules/apps/perekup/app.json",
                 "ui/modules/apps/perekup/app.js",
                 "ui/modules/apps/perekup/app.css",
@@ -39,19 +39,22 @@ class PackageTests(unittest.TestCase):
                 "LICENSE",
             ):
                 self.assertIn(expected, names)
+            self.assertNotIn("lua/vehicle/extensions/perekup_repair.lua", names)
 
     def test_app_metadata_matches_the_directive(self) -> None:
         with ZipFile(ARCHIVE) as archive:
             app = json.loads(archive.read("ui/modules/apps/perekup/app.json"))
             script = archive.read("ui/modules/apps/perekup/app.js").decode("utf-8")
+            vehicle_state = archive.read("lua/vehicle/extensions/perekup_vehicle_state.lua").decode("utf-8")
             self.assertEqual(app["directive"], "perekupApp")
             self.assertEqual(app["domElement"], "<perekup-app></perekup-app>")
             self.assertIn("directive('perekupApp'", script)
             self.assertIn("track by car.id", script)
             self.assertNotIn("track by car.key", script)
-            self.assertIn("Повреждения BeamNG пока не считываются", script)
+            self.assertIn("цена остаются оценками карьеры", script)
             self.assertIn("retrieveVehicle", script)
             self.assertIn("returnVehicle", script)
+            self.assertIn("onVehicleStateRestored", vehicle_state)
             self.assertIn("scope.tr = function", script)
             self.assertIn("Русский", script)
             self.assertIn("English", script)

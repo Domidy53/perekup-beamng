@@ -6,8 +6,9 @@ var perekupText = {
     newBusiness: 'НОВОЕ ДЕЛО · 01', startSmall: 'Начните с малого', startDescription: 'Выберите доступную машину из каталога вашей игры. Она станет первой в гараже, а на баланс будет зачислено $500.',
     noCars: 'Машины не найдены', loadMap: 'Убедитесь, что уровень East Coast USA загружен и каталог автомобилей готов.', chooseCar: 'Выбрать машину',
     starterCount: 'В каталоге доступно {count} из 3 возможных стартовых машин.',
-    physicalWarning: 'Машины создаются в игровом мире через BeamNG. Ремонт выполняет полный физический сброс выбранной машины. Повреждения BeamNG пока не считываются: процент состояния и оценка цены служат расчётами карьеры.',
+    physicalWarning: 'При возврате мод пытается записать конфигурацию и физическое состояние машины. Восстановление зависит от версии BeamNG и совместимости машины; сторонние модули могут не сохранять своё состояние. Ремонт выполняет полный физический сброс. Процент состояния и цена остаются оценками карьеры.',
     repairPending: 'Ожидается подтверждение игрового объекта. Операции с карьерой временно приостановлены.',
+    storePending: 'Проверяется физическое сохранение. Машина останется в мире до подтверждения записи.',
     business: 'Дело', market: 'Объявления', garage: 'Гараж', history: 'История',
     day: 'День', cars: 'В гараже', yourBusiness: 'Ваше дело', overviewDescription: 'Покупайте машины из каталога, оплачивайте ремонт и выставляйте их на перепродажу.',
     starterCar: 'Стартовая машина', starterUnavailable: 'Конфигурация сейчас недоступна. Запись сохранена.', openListings: 'Открыть объявления', nextDay: 'Следующий день', dailyRefresh: 'Объявления обновляются на следующий день. Действия и баланс сохраняются локально.',
@@ -28,8 +29,9 @@ var perekupText = {
     newBusiness: 'NEW BUSINESS · 01', startSmall: 'Start small', startDescription: 'Choose an available vehicle from your game catalog. It will be your first car, and you will receive $500.',
     noCars: 'No vehicles found', loadMap: 'Make sure East Coast USA is loaded and the vehicle catalog is ready.', chooseCar: 'Choose vehicle',
     starterCount: '{count} of 3 possible starter vehicles are available.',
-    physicalWarning: 'Vehicles are created in the BeamNG world. Repair performs a full physics reset of the selected vehicle. BeamNG damage is not read yet: condition and price are career estimates.',
+    physicalWarning: 'When a vehicle is returned, the mod attempts to save its configuration and physical state. Restore depends on the BeamNG version and vehicle compatibility; third-party modules may not preserve their own state. Repair performs a full physics reset. Condition and price remain career estimates.',
     repairPending: 'Waiting for the game object to confirm. Career actions are temporarily paused.',
+    storePending: 'Verifying the physical save. The vehicle remains in the world until the write is confirmed.',
     business: 'Business', market: 'Listings', garage: 'Garage', history: 'History',
     day: 'Day', cars: 'In garage', yourBusiness: 'Your business', overviewDescription: 'Buy vehicles from the catalog, pay for repairs, and list them for resale.',
     starterCar: 'Starter vehicle', starterUnavailable: 'Configuration is currently unavailable. The record is saved.', openListings: 'Open listings', nextDay: 'Next day', dailyRefresh: 'Listings refresh the next day. Actions and balance are saved locally.',
@@ -108,7 +110,8 @@ angular.module('beamng.apps').directive('perekupApp', function () {
 
         <div class="perekup-active" ng-if="snapshot.status === 'active' && careerOpen">
           <div class="perekup-warning" role="note" ng-bind="tr('physicalWarning')"></div>
-          <div class="perekup-message" ng-if="snapshot.career.pendingRepair" ng-bind="tr('repairPending')"></div>
+          <div class="perekup-message" ng-if="snapshot.pendingRepair" ng-bind="tr('repairPending')"></div>
+          <div class="perekup-message" ng-if="snapshot.pendingStore" ng-bind="tr('storePending')"></div>
           <nav class="perekup-tabs" ng-attr-aria-label="{{tr('sections')}}">
             <button ng-class="{selected: tab === 'overview'}" ng-click="setTab('overview')" ng-bind="tr('business')"></button>
             <button ng-class="{selected: tab === 'market'}" ng-click="setTab('market')" ng-bind="tr('market')"></button>
@@ -140,8 +143,8 @@ angular.module('beamng.apps').directive('perekupApp', function () {
               <div class="perekup-card-title"><strong ng-bind="offer.displayName"></strong><span ng-bind="offer.type"></span></div>
               <div class="perekup-price-line"><strong>{{offer.price | number:0}} $</strong><span ng-bind="tr('usedEstimate')"></span></div>
               <div class="perekup-card-meta">{{tr('baseEstimate')}}: {{offer.marketValue | number:0}} $ · {{offer.valueSource === 'metadata' ? tr('valueField') : tr('featureEstimate')}}</div>
-              <div class="perekup-card-meta">{{tr('config')}}: <span ng-bind="offer.configName"></span> · {{tr('conditionEstimate')}}: 35% · ID <code ng-bind="offer.modelKey"></code></div>
-              <button class="perekup-primary" ng-click="buy(offer.id)" ng-disabled="snapshot.career.money < offer.price || snapshot.career.pendingRepair" ng-bind="tr('buy')"></button>
+              <div class="perekup-card-meta">{{tr('config')}}: <span ng-bind="offer.configName"></span> · {{tr('conditionEstimate')}}: {{offer.condition}}% · ID <code ng-bind="offer.modelKey"></code></div>
+              <button class="perekup-primary" ng-click="buy(offer.id)" ng-disabled="snapshot.career.money < offer.price || snapshot.pendingRepair || snapshot.pendingStore" ng-bind="tr('buy')"></button>
             </article>
             <div class="perekup-empty" ng-if="availableOffers().length === 0">
               <strong ng-bind="tr('noOffers')"></strong><span ng-bind="tr('noOffersHelp')"></span>
@@ -163,10 +166,10 @@ angular.module('beamng.apps').directive('perekupApp', function () {
                 <button class="perekup-secondary" ng-if="car.inWorld" ng-click="returnToGarage(car.id)" ng-bind="tr('returnGarage')"></button>
               </div>
               <div class="perekup-row-actions" ng-if="car.status === 'owned'">
-                <button class="perekup-secondary" ng-click="repair(car.id)" ng-disabled="!car.inWorld || car.repairUsed || car.condition >= 100 || snapshot.career.money < car.repairQuote || snapshot.career.pendingRepair">{{tr('physicalReset')}} · {{car.repairQuote | number:0}} $</button>
-                <button class="perekup-primary" ng-click="list(car.id)" ng-disabled="car.inWorld || snapshot.career.pendingRepair" ng-bind="tr('listForSale')"></button>
+                <button class="perekup-secondary" ng-click="repair(car.id)" ng-disabled="!car.inWorld || car.repairUsed || car.condition >= 100 || snapshot.career.money < car.repairQuote || snapshot.pendingRepair || snapshot.pendingStore">{{tr('physicalReset')}} · {{car.repairQuote | number:0}} $</button>
+                <button class="perekup-primary" ng-click="list(car.id)" ng-disabled="car.inWorld || snapshot.pendingRepair || snapshot.pendingStore" ng-bind="tr('listForSale')"></button>
               </div>
-              <button class="perekup-primary" ng-if="car.status === 'for_sale'" ng-click="sell(car.id)" ng-disabled="car.inWorld || snapshot.career.pendingRepair">{{tr('sellFor')}} {{car.askingPrice | number:0}} $</button>
+              <button class="perekup-primary" ng-if="car.status === 'for_sale'" ng-click="sell(car.id)" ng-disabled="car.inWorld || snapshot.pendingRepair || snapshot.pendingStore">{{tr('sellFor')}} {{car.askingPrice | number:0}} $</button>
             </article>
             <div class="perekup-empty" ng-if="snapshot.career.vehicles.length === 0"><strong ng-bind="tr('emptyGarage')"></strong></div>
           </div>

@@ -4,6 +4,8 @@ local Career = require("perekup/career")
 local Economy = require("perekup/economy")
 local Storage = require("perekup/persistence")
 local Vehicles = require("perekup/vehicles")
+local Listings = require("perekup/listings")
+local World = require("perekup/world")
 
 local testsRun = 0
 
@@ -67,6 +69,21 @@ test("catalog rejects missing and non-road categories", function()
   equal(candidates[1].modelKey, "target")
 end)
 
+test("vehicle config capture rejects malformed variables and paint data", function()
+  local previous = core_vehicle_manager
+  core_vehicle_manager = {
+    getVehicleData = function() return { config = { model = "car_a", parts = {}, vars = "invalid" } } end
+  }
+  local snapshot = World.captureVehicleConfig(1, "car_a")
+  equal(snapshot, nil, "malformed variables must not be silently replaced with an empty table")
+  core_vehicle_manager.getVehicleData = function()
+    return { config = { model = "car_a", parts = {}, vars = {}, paints = "invalid" } }
+  end
+  snapshot = World.captureVehicleConfig(1, "car_a")
+  equal(snapshot, nil, "malformed paint data must not be silently replaced with an empty table")
+  core_vehicle_manager = previous
+end)
+
 test("market prices use configuration value metadata and avoid implausible low prices", function()
   local sport = configs[2]
   equal(Economy.referenceValue(sport), 45000)
@@ -109,6 +126,31 @@ test("career starts with 500 dollars and a dynamic starter vehicle", function()
   equal(state.day, 1)
   equal(state.vehicles[1].modelKey, starter.modelKey)
   truthy(Career.isValidState(state))
+end)
+
+test("starter sale always leaves a day-one offer plus its repair reserve", function()
+  local config = {
+    id = "reserve_test_1", modelKey = "reserve_car", configKey = "reserve.base",
+    modelName = "Reserve", displayName = "Reserve", configName = "Base", type = "car",
+    value = 50000000
+  }
+  local starterVehicle = { id = config.id, modelKey = config.modelKey, configKey = config.configKey,
+    marketValue = 50000000, condition = 45 }
+  for attempt = 1, 2000 do
+    config.id = "reserve_test_" .. tostring(attempt)
+    starterVehicle.id = config.id
+    local normalPrice = Economy.listingPrice(config, 1, 35)
+    local normalReserve = Economy.repairCost({ condition = 35, marketValue = 50000000 })
+    local budget = 500 + Economy.resalePrice(starterVehicle)
+    if normalPrice + normalReserve > budget then
+      local offers = Listings.create({ config }, 1, starterVehicle)
+      equal(#offers, 1)
+      equal(offers[1].condition, 20)
+      truthy(offers[1].price + Economy.repairCost({ condition = offers[1].condition, marketValue = offers[1].marketValue }) <= budget)
+      return
+    end
+  end
+  error("could not find a deterministic high-variance test listing")
 end)
 
 test("starter vehicle can fund the first used-car purchase", function()
@@ -246,41 +288,119 @@ test("storage blocks new careers when existing primary and backup are invalid", 
   truthy(err)
 end)
 
-test("vehicle repair waits for the physics reset hook before reporting success", function()
-  local resetType
-  local flexMeshReset = false
-  local callback
+test("vehicle state adapter verifies serialization, restores compatibly, and retries reset acknowledgements", function()
+  local files = {}
+  local callbacks = {}
+  local loadCount, resetCount, saveAllowed = 0, 0, true
+  local parts = { engine = "test_engine", suspension = "test_suspension" }
+  local vars = { tireWidth = 0.2 }
+  local function savedState()
+    return {
+      format = "v2", model = "test_car", vehicleDirectory = "vehicles/test_car",
+      nodeCount = 2, beamCount = 1, parts = Career.copy(parts), vars = Career.copy(vars),
+      hydros = {}, nodes = { [1] = { pos = { 0, 0, 0 }, mass = 1 }, [2] = { pos = { 1, 0, 0 }, mass = 1 } },
+      beams = { [1] = { broken = false } }
+    }
+  end
+  FS = { fileExists = function(_, path) return files[path] ~= nil end }
+  jsonReadFile = function(path) return Career.copy(files[path]) end
+  v = {
+    data = { model = "test_car", vehicleDirectory = "vehicles/test_car", nodes = { 1, 2 }, beams = { 1 } },
+    userPartConfig = parts,
+    userVars = vars
+  }
+  beamstate = {
+    save = function(path)
+      if not saveAllowed then return false end
+      files[path] = savedState()
+      return true
+    end,
+    load = function(path)
+      truthy(files[path])
+      loadCount = loadCount + 1
+      return true
+    end
+  }
   RESET_PHYSICS = 73
   obj = {
     getID = function() return 4242 end,
-    requestReset = function(_, value) resetType = value end,
-    resetBrokenFlexMesh = function() flexMeshReset = true end,
-    queueGameEngineLua = function(_, command) callback = command end
+    requestReset = function(_, value)
+      equal(value, RESET_PHYSICS)
+      resetCount = resetCount + 1
+      return true
+    end,
+    resetBrokenFlexMesh = function() return true end,
+    queueGameEngineLua = function(_, command)
+      callbacks[#callbacks + 1] = command
+      return true
+    end
   }
-  package.loaded["perekup_repair"] = nil
-  local vehicleRepair = dofile("lua/vehicle/extensions/perekup_repair.lua")
-  truthy(vehicleRepair.requestRepair("R73"))
-  equal(resetType, RESET_PHYSICS)
-  equal(flexMeshReset, true)
-  equal(callback, nil)
-  vehicleRepair.onReset()
-  truthy(callback)
-  truthy(callback:find("onRepairResult('R73', 4242, true)", 1, true))
-  callback = nil
-  truthy(vehicleRepair.requestRepair("R73"))
-  truthy(callback)
-  truthy(callback:find("onRepairResult('R73', 4242, true)", 1, true), "completed token should resend its acknowledgement without resetting")
-  equal(vehicleRepair.requestRepair("bad'token"), false)
+  package.loaded["perekup_vehicle_state"] = nil
+  local vehicleState = dofile("lua/vehicle/extensions/perekup_vehicle_state.lua")
+  local statePath = "settings/perekup_vehicle_states/unit_state.json"
+  truthy(vehicleState.saveState(statePath, "S73", "store"))
+  truthy(callbacks[#callbacks]:find('onVehicleStateSaved("S73", 4242, "store", true)', 1, true))
+  local saveCalls = #callbacks
+  truthy(vehicleState.saveState(statePath, "S73", "store"))
+  equal(#callbacks, saveCalls + 1, "a repeated save must re-ack the same verified file")
+  truthy(vehicleState.restoreState(statePath, "L73"))
+  equal(loadCount, 1)
+  truthy(vehicleState.restoreState(statePath, "L73"))
+  equal(loadCount, 1, "restore token replay must not load the same state twice")
+
+  local postPath = "settings/perekup_vehicle_states/unit_repair_post.json"
+  local callbacksBeforeRepair = #callbacks
+  truthy(vehicleState.requestRepair("R73", postPath))
+  equal(resetCount, 1)
+  vehicleState.onReset()
+  equal(#callbacks, callbacksBeforeRepair, "the reset hook schedules a post-reset save on the next vehicle update")
+  vehicleState.updateGFX(0.1)
+  truthy(callbacks[#callbacks]:find('onRepairResult("R73", 4242, true, "saved")', 1, true))
+  truthy(vehicleState.requestRepair("R73", postPath))
+  equal(resetCount, 1, "a completed repair token must not reset twice")
+
+  saveAllowed = false
+  truthy(vehicleState.requestRepair("R74", "settings/perekup_vehicle_states/retry_post.json"))
+  vehicleState.onReset()
+  local callbackCount = #callbacks
+  vehicleState.updateGFX(5)
+  equal(#callbacks, callbackCount, "failed post-reset file verification must not claim success")
+  saveAllowed = true
+  vehicleState.updateGFX(5)
+  truthy(callbacks[#callbacks]:find('onRepairResult("R74", 4242, true, "saved")', 1, true))
+
   obj.requestReset = function() return false end
-  callback = nil
-  equal(vehicleRepair.requestRepair("R74"), false)
-  truthy(callback)
-  truthy(callback:find("onRepairResult('R74', 4242, false)", 1, true))
+  equal(vehicleState.requestRepair("R75", "settings/perekup_vehicle_states/rejected_post.json"), false)
+  truthy(callbacks[#callbacks]:find('onRepairResult("R75", 4242, false, "rejected")', 1, true))
 end)
 
-test("BeamNG adapter exposes a complete career loop through guarded engine bridges", function()
-  local files = {}
-  local lastEvent
+test("schema-one pending repair migrates without a debit when its physical checkpoint is unknown", function()
+  local legacy = Career.copy(state)
+  legacy.schema = 1
+  legacy.nextOperationNumber = nil
+  legacy.pendingStore = nil
+  for _, vehicle in ipairs(legacy.vehicles) do
+    vehicle.configSnapshot = nil
+    vehicle.beamStateFile = nil
+  end
+  local quote = Economy.repairCost(legacy.vehicles[1])
+  legacy.pendingRepair = {
+    token = "R1", vehicleId = legacy.vehicles[1].id, objectId = 12, cost = quote,
+    conditionAfter = 100, repairCostAfter = quote
+  }
+  legacy.money = legacy.money + quote
+  local before = legacy.money
+  local upgraded, changed, warning = Career.upgradeState(legacy)
+  truthy(changed)
+  truthy(warning)
+  equal(upgraded.schema, 2)
+  equal(upgraded.pendingRepair, nil)
+  equal(upgraded.money, before)
+  truthy(Career.isValidState(upgraded))
+end)
+
+test("BeamNG adapter persists physical state and recovers repair/store after lost acknowledgements and changed object IDs", function()
+  local files, lastEvent = {}, nil
   local rejectGameSaveWrites = false
   FS = {
     fileExists = function(_, path) return files[path] ~= nil end,
@@ -294,13 +414,40 @@ test("BeamNG adapter exposes a complete career loop through guarded engine bridg
     files[path] = Career.copy(data)
     return true
   end
-  local worldObjects = {}
-  local nextObjectId = 100
-  local activeObjectId
-  local rejectSpawn = false
-  getObjectByID = function(objectId)
-    return worldObjects[tonumber(objectId)]
+  local worldObjects, nextObjectId, activeObjectId = {}, 100, nil
+  local rejectSpawn, spawnCount = false, 0
+  local function configSnapshot(modelKey, configKey, custom)
+    if type(custom) == "table" then return Career.copy(custom) end
+    return {
+      format = "2", model = modelKey, licenseName = "TEST-" .. modelKey,
+      parts = { engine = "engine_" .. configKey, suspension = "suspension_" .. configKey },
+      vars = { tireWidth = 0.2 }, paints = { { baseColor = { 0.2, 0.3, 0.4, 1 } } }
+    }
   end
+  local function makeBeamstateFile(snapshot, marker)
+    return {
+      format = "v2", model = snapshot.model, vehicleDirectory = "vehicles/" .. snapshot.model,
+      nodeCount = 2, beamCount = 1, parts = Career.copy(snapshot.parts), vars = Career.copy(snapshot.vars),
+      hydros = {}, nodes = {
+        [1] = { pos = { marker or 1, 0, 0 }, mass = 1 },
+        [2] = { pos = { 0, marker or 1, 0 }, mass = 1 }
+      }, beams = { [1] = { broken = false, marker = marker or 1 } }
+    }
+  end
+  local function seedStateFile(path, snapshot, marker)
+    files[path] = makeBeamstateFile(snapshot, marker)
+  end
+  local function lastSavedCareer()
+    return files[Storage.SAVE_PATH]
+  end
+  local function newCore()
+    package.loaded["perekup_core"] = nil
+    local core = require("perekup_core")
+    core.onExtensionLoaded()
+    return core
+  end
+
+  getObjectByID = function(objectId) return worldObjects[tonumber(objectId)] end
   be = {
     getObjectByID = function(_, objectId) return worldObjects[tonumber(objectId)] end,
     getPlayerVehicleID = function(_, playerId)
@@ -320,15 +467,16 @@ test("BeamNG adapter exposes a complete career loop through guarded engine bridg
     equal(options.autoEnterVehicle, true)
     if rejectSpawn then return nil end
     local id = nextObjectId
-    nextObjectId = nextObjectId + 1
-    local object = { queuedCommands = {} }
+    nextObjectId, spawnCount = nextObjectId + 1, spawnCount + 1
+    local key = type(options.config) == "string" and options.config or "default"
+    local object = { queuedCommands = {}, config = configSnapshot(modelKey, key, options.config) }
     object.getID = function() return id end
     object.queueLuaCommand = function(_, command)
       object.queuedCommands[#object.queuedCommands + 1] = command
       return true
     end
     object.delete = function()
-      equal(activeObjectId == id, false, "the active player vehicle must be exited before deletion")
+      equal(activeObjectId == id, false, "the player vehicle must be exited before deletion")
       worldObjects[id] = nil
       return true
     end
@@ -347,33 +495,61 @@ test("BeamNG adapter exposes a complete career loop through guarded engine bridg
     end,
     spawnNewVehicle = spawnMockVehicle
   }
+  core_vehicle_manager = {
+    getVehicleData = function(id)
+      local object = worldObjects[tonumber(id)]
+      return object and { config = Career.copy(object.config) } or nil
+    end
+  }
   guihooks = {
     trigger = function(eventName, payload)
       equal(eventName, "PerekupSnapshot")
       lastEvent = payload
     end
   }
-  package.loaded["perekup_core"] = nil
-  local GameCore = require("perekup_core")
-  GameCore.onExtensionLoaded()
-  truthy(GameCore.requestSnapshot())
+  local function destroyObject(core, id)
+    worldObjects[tonumber(id)] = nil
+    if activeObjectId == tonumber(id) then activeObjectId = nil end
+    core.onVehicleDestroyed(id)
+  end
+  local function refreshCore(core)
+    truthy(core.requestSnapshot())
+    return lastEvent
+  end
+
+  local GameCore = newCore()
+  truthy(refreshCore(GameCore))
   equal(lastEvent.status, "new")
   equal(#lastEvent.starterOptions, 3)
 
   rejectSpawn = true
   equal(GameCore.startCareer(lastEvent.starterOptions[1].id), false)
   equal(lastEvent.status, "new")
-  equal(files[Storage.SAVE_PATH], nil)
+  equal(lastSavedCareer(), nil)
   rejectSpawn = false
   truthy(GameCore.startCareer(lastEvent.starterOptions[1].id))
   equal(lastEvent.status, "active")
   equal(lastEvent.career.money, 500)
   local starterId = lastEvent.career.starterVehicleId
+  local starterObjectId = lastEvent.career.vehicles[1].worldObjectId
   equal(lastEvent.career.vehicles[1].inWorld, true)
   equal(GameCore.sellVehicle(starterId), false)
   equal(lastEvent.career.money, 500)
+
   truthy(GameCore.returnVehicle(starterId))
+  equal(lastEvent.pendingStore.status, "saving")
+  equal(lastEvent.career.vehicles[1].inWorld, true, "the object must remain until the physical file is verified")
+  local storePending = Career.copy(lastSavedCareer().pendingStore)
+  seedStateFile(storePending.stateFile, storePending.configSnapshot, 77)
+  GameCore = newCore()
+  equal(lastEvent.pendingStore, nil, "a valid file must recover even when its save acknowledgement was lost")
   equal(lastEvent.career.vehicles[1].inWorld, false)
+  equal(lastSavedCareer().vehicles[1].configSnapshot.parts.engine, storePending.configSnapshot.parts.engine)
+  equal(lastSavedCareer().vehicles[1].beamStateFile, storePending.stateFile)
+  local balanceAfterStore = lastEvent.career.money
+  equal(GameCore.onVehicleStateSaved(storePending.token, starterObjectId, "store", true), false)
+  equal(lastEvent.career.money, balanceAfterStore, "a replayed completed store acknowledgement must not mutate the career")
+
   truthy(GameCore.listVehicle(starterId))
   local starterSalePrice = lastEvent.career.vehicles[1].askingPrice
   truthy(GameCore.sellVehicle(starterId))
@@ -381,13 +557,13 @@ test("BeamNG adapter exposes a complete career loop through guarded engine bridg
 
   local firstListing
   for _, offer in ipairs(lastEvent.career.listings) do
-    local repairQuote = Economy.repairCost({ condition = 35, marketValue = offer.marketValue })
+    local repairQuote = Economy.repairCost({ condition = offer.condition, marketValue = offer.marketValue })
     if offer.status == "available" and offer.price + repairQuote <= lastEvent.career.money
       and (not firstListing or offer.price < firstListing.price) then
       firstListing = offer
     end
   end
-  truthy(firstListing, "expected an offer affordable with its repair reserve")
+  truthy(firstListing, "expected an offer affordable with a repair reserve after the starter sale")
   truthy(GameCore.buyListing(firstListing.id))
   local boughtId = lastEvent.career.vehicles[2].id
   local afterPurchase = lastEvent.career.money
@@ -395,76 +571,108 @@ test("BeamNG adapter exposes a complete career loop through guarded engine bridg
   equal(lastEvent.career.money, afterPurchase)
 
   truthy(GameCore.retrieveVehicle(boughtId))
-  local firstObjectId = lastEvent.career.vehicles[2].worldObjectId
-  truthy(firstObjectId)
+  local oldObjectId = lastEvent.career.vehicles[2].worldObjectId
+  local firstSpawnCount = spawnCount
   equal(lastEvent.career.vehicles[2].inWorld, true)
   equal(GameCore.retrieveVehicle(boughtId), false)
+  equal(spawnCount, firstSpawnCount, "a repeated retrieve command must not create a duplicate object")
   equal(GameCore.listVehicle(boughtId), false)
 
   local repairQuote = lastEvent.career.vehicles[2].repairQuote
   local beforeRepair = lastEvent.career.money
+  rejectGameSaveWrites = true
+  equal(GameCore.repairVehicle(boughtId), false)
+  equal(lastEvent.career.money, beforeRepair)
+  rejectGameSaveWrites = false
+
   truthy(GameCore.repairVehicle(boughtId))
-  local failedRepairToken = lastEvent.career.pendingRepair.token
+  local failedCheckpoint = Career.copy(lastSavedCareer().pendingRepair)
   equal(lastEvent.career.money, beforeRepair)
   equal(GameCore.repairVehicle(boughtId), false)
   equal(GameCore.advanceDay(), false)
-  worldObjects[firstObjectId] = nil
-  GameCore.onVehicleDestroyed(firstObjectId)
-  equal(lastEvent.career.pendingRepair, nil)
-  equal(lastEvent.career.money, beforeRepair)
+  destroyObject(GameCore, oldObjectId)
+  equal(lastSavedCareer().pendingRepair, nil, "a lost pre-checkpoint object can be cancelled without charging")
   equal(lastEvent.career.vehicles[2].repairUsed, false)
-  equal(GameCore.onRepairResult(failedRepairToken, firstObjectId, true), false)
+  equal(GameCore.onRepairResult(failedCheckpoint.token, oldObjectId, true, "saved"), false)
 
   truthy(GameCore.retrieveVehicle(boughtId))
-  local objectId = lastEvent.career.vehicles[2].worldObjectId
+  oldObjectId = lastEvent.career.vehicles[2].worldObjectId
   truthy(GameCore.repairVehicle(boughtId))
-  local repairToken = lastEvent.career.pendingRepair.token
+  local repairPending = Career.copy(lastSavedCareer().pendingRepair)
+  seedStateFile(repairPending.preStateFile, repairPending.configSnapshot, 91)
+  truthy(GameCore.onVehicleStateSaved(repairPending.token, oldObjectId, "repair_checkpoint", true))
+  equal(lastSavedCareer().pendingRepair.phase, "reset")
   equal(lastEvent.career.money, beforeRepair)
-  local realClock = os.clock
-  local fakeClock = 100
-  os.clock = function() return fakeClock end
-  package.loaded["perekup_core"] = nil
-  local ReloadedCore = require("perekup_core")
-  ReloadedCore.onExtensionLoaded()
-  GameCore = ReloadedCore
-  truthy(worldObjects[objectId].queuedCommands[2], "pending repair should be re-queued after extension load")
-  fakeClock = 121
-  GameCore.onUpdate()
-  truthy(lastEvent.career.pendingRepair, "a delayed acknowledgement must not cancel a live physical repair")
-  truthy(worldObjects[objectId].queuedCommands[3], "live pending repair should re-request an acknowledgement after timeout")
-  rejectGameSaveWrites = true
-  equal(GameCore.onRepairResult(repairToken, objectId, true), false)
+
+  destroyObject(GameCore, oldObjectId)
+  truthy(lastSavedCareer().pendingRepair, "a possibly started reset survives loss of its old object ID")
   equal(lastEvent.career.money, beforeRepair)
-  fakeClock = 142
-  GameCore.onUpdate()
-  truthy(lastEvent.career.pendingRepair, "a failed acknowledgement save must stay pending until it can be retried")
-  equal(lastEvent.career.money, beforeRepair)
-  rejectGameSaveWrites = false
-  fakeClock = 143
-  GameCore.onUpdate()
-  os.clock = realClock
-  equal(lastEvent.career.pendingRepair, nil)
+  local verifiedCheckpoint = Career.copy(files[repairPending.preStateFile])
+  files[repairPending.preStateFile] = nil
+  local beforeBlockedRetrieve = spawnCount
+  equal(GameCore.retrieveVehicle(boughtId), false, "a missing repair checkpoint must not trigger an unverified free reset")
+  equal(spawnCount, beforeBlockedRetrieve)
+  files[repairPending.preStateFile] = verifiedCheckpoint
+  truthy(GameCore.retrieveVehicle(boughtId))
+  local newObjectId = lastEvent.career.vehicles[2].worldObjectId
+  truthy(newObjectId ~= oldObjectId)
+  equal(worldObjects[newObjectId].config.parts.engine, repairPending.configSnapshot.parts.engine,
+    "retrieval must rebuild the saved part configuration before loading physical state")
+  local restoreCommand = worldObjects[newObjectId].queuedCommands[1]
+  local restoreToken = restoreCommand and restoreCommand:match('restoreState%([^,]+,%s*"([A-Za-z0-9_%-]+)"%)')
+  truthy(restoreToken, "retrieval must queue the verified physical checkpoint restore")
+  truthy(GameCore.onVehicleStateRestored(restoreToken, newObjectId, true))
+  equal(lastSavedCareer().pendingRepair.objectId, newObjectId)
+  truthy(worldObjects[newObjectId].queuedCommands[2]:find("requestRepair", 1, true))
+  local pendingAfterRebind = Career.copy(lastSavedCareer().pendingRepair)
+  seedStateFile(pendingAfterRebind.postStateFile, pendingAfterRebind.configSnapshot, 101)
+
+  GameCore = newCore()
+  equal(lastEvent.pendingRepair, nil, "a verified post-reset file must complete a repair after a lost acknowledgement")
   equal(lastEvent.career.money, beforeRepair - repairQuote)
   equal(lastEvent.career.vehicles[2].condition, 100)
   equal(lastEvent.career.vehicles[2].repairUsed, true)
-  equal(GameCore.onRepairResult(repairToken, objectId, true), false)
+  equal(GameCore.onRepairResult(repairPending.token, newObjectId, true, "saved"), false)
+  equal(lastEvent.career.money, beforeRepair - repairQuote, "duplicate repair callbacks must not debit twice")
+
+  local storedBeforeFailure = lastSavedCareer().vehicles[2].beamStateFile
+  truthy(GameCore.returnVehicle(boughtId))
+  local missingStore = Career.copy(lastSavedCareer().pendingStore)
+  destroyObject(GameCore, missingStore.objectId)
+  equal(lastSavedCareer().pendingStore, nil, "a missing object without a verified new file cancels only the store operation")
+  equal(lastSavedCareer().vehicles[2].beamStateFile, storedBeforeFailure, "the previous physical save must remain available")
   equal(lastEvent.career.money, beforeRepair - repairQuote)
 
-  equal(GameCore.listVehicle(boughtId), false)
+  local validStoredFile = Career.copy(files[storedBeforeFailure])
+  files[storedBeforeFailure].parts = { incompatible = true }
+  local beforeRejectedSpawn = spawnCount
+  equal(GameCore.retrieveVehicle(boughtId), false)
+  equal(spawnCount, beforeRejectedSpawn, "a mismatched physical save must fail before spawning")
+  files[storedBeforeFailure] = validStoredFile
+  truthy(GameCore.retrieveVehicle(boughtId))
+  newObjectId = lastEvent.career.vehicles[2].worldObjectId
+  restoreCommand = worldObjects[newObjectId].queuedCommands[1]
+  restoreToken = restoreCommand and restoreCommand:match('restoreState%([^,]+,%s*"([A-Za-z0-9_%-]+)"%)')
+  truthy(restoreToken)
+  truthy(GameCore.onVehicleStateRestored(restoreToken, newObjectId, true))
   truthy(GameCore.returnVehicle(boughtId))
+  local finalStore = Career.copy(lastSavedCareer().pendingStore)
+  seedStateFile(finalStore.stateFile, finalStore.configSnapshot, 111)
+  truthy(GameCore.onVehicleStateSaved(finalStore.token, newObjectId, "store", true))
+  equal(lastEvent.career.vehicles[2].inWorld, false)
+  equal(lastSavedCareer().vehicles[2].beamStateFile, finalStore.stateFile)
+
   truthy(GameCore.listVehicle(boughtId))
   local salePrice = lastEvent.career.vehicles[2].askingPrice
   truthy(GameCore.sellVehicle(boughtId))
   equal(lastEvent.career.money, beforeRepair - repairQuote + salePrice)
   equal(lastEvent.career.vehicles[2].status, "sold")
-  truthy(files[Storage.SAVE_PATH])
+  truthy(lastSavedCareer())
 
-  package.loaded["perekup_core"] = nil
-  ReloadedCore = require("perekup_core")
-  ReloadedCore.onExtensionLoaded()
-  truthy(ReloadedCore.requestSnapshot())
+  GameCore = newCore()
+  truthy(refreshCore(GameCore))
   equal(lastEvent.status, "active")
-  equal(lastEvent.career.money, files[Storage.SAVE_PATH].money)
+  equal(lastEvent.career.money, lastSavedCareer().money)
   equal(lastEvent.career.history[#lastEvent.career.history].kind, "sale")
   truthy(starterSalePrice > 0)
 end)

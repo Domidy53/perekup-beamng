@@ -3,15 +3,41 @@ local Economy = require("perekup/economy")
 local M = {}
 local MAX_LISTINGS = 12
 
-function M.create(configs, day)
+function M.create(configs, day, starter)
   local candidates = {}
   for _, config in ipairs(configs or {}) do
     candidates[#candidates + 1] = {
       config = config,
       price = Economy.listingPrice(config, day, 35),
-      marketValue = Economy.referenceValue(config)
+      marketValue = Economy.referenceValue(config),
+      condition = 35
     }
   end
+
+  if day == 1 and type(starter) == "table" then
+    local budget = 500 + Economy.resalePrice(starter)
+    local affordable = false
+    for _, candidate in ipairs(candidates) do
+      local repairReserve = Economy.repairCost({
+        condition = candidate.condition,
+        marketValue = candidate.marketValue
+      })
+      if candidate.price + repairReserve <= budget then
+        affordable = true
+        break
+      end
+    end
+    if not affordable then
+      for _, candidate in ipairs(candidates) do
+        if candidate.config.modelKey == starter.modelKey and candidate.config.configKey == starter.configKey then
+          candidate.condition = 20
+          candidate.price = Economy.listingPrice(candidate.config, day, candidate.condition)
+          break
+        end
+      end
+    end
+  end
+
   table.sort(candidates, function(left, right)
     if left.price == right.price then
       return left.config.id < right.config.id
@@ -38,7 +64,8 @@ function M.create(configs, day)
       power = config.power,
       weight = config.weight,
       performanceClass = config.performanceClass,
-      status = "available"
+      status = "available",
+      condition = candidate.condition
     }
   end
   return listings

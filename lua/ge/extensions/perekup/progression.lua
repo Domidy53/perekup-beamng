@@ -7,7 +7,7 @@ function M.advanceDay(state, configs)
     return false, "Достигнут предел игрового календаря."
   end
   state.day = state.day + 1
-  state.listings = Listings.create(configs, state.day, state.vehicles)
+  state.listings = Listings.create(configs, state.day)
   return true
 end
 
