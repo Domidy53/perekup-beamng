@@ -36,7 +36,7 @@
 2. Открывает интерфейс **ПЕРЕКУП**, выбирает «Новая карьера» или «Продолжить».
 3. Выбирает одну из доступных машин, получает **500 $**, а стартовая машина появляется в мире.
 4. Игрок может выставить стартовую машину, покупать объявления, вывести купленную машину в мир, вернуть её в гараж, отремонтировать полным физическим сбросом и продать.
-5. Локальное сохранение запоминает деньги, конфигурации, физические checkpoint-файлы, предложения и историю. Игровой object ID может измениться; незавершённые операции связываются повторно после восстановления объекта.
+5. Локальное сохранение запоминает деньги, конфигурации, физические checkpoint-файлы, предложения и историю. Игровой object ID временный; при восстановлении PEREKUP создаёт новый объект из сохранённых данных и связывает с карьерой только его.
 
 Отдельная кнопка в главном меню — **возможное будущее улучшение**, не требование первой версии.
 
@@ -51,6 +51,7 @@
 - Используем внутренние BeamNG `beamstate.save/load` в формате `v2` только с проверкой модели, каталога автомобиля, конфигурации, узлов, балок и гидравлики. `.pc`-поля `parts`, `vars` и `paints` сохраняются отдельно, потому что Beamstate не сохраняет цвет.
 - До сохранённого checkpoint ремонт не запускается. После reset списываем деньги только когда проверен post-reset файл и карьерная запись подтверждена. Повторные команды используют один токен, а потерянные подтверждения восстанавливаются по файлу.
 - Незавершённый ремонт переживает перезапуск и повторно привязывается к новому игровому ID. Если checkpoint потерян до reset, операция отменяется без списания; если reset уже мог начаться, операция сохраняется и ждёт восстановления машины, чтобы не дать бесплатный ремонт.
+- Постоянный ID машины принадлежит только карьерной записи. Числовой BeamNG object ID и nonce связи находятся только в runtime-памяти; при перезагрузке GE Lua в `M.state` сохраняется только счётчик поколения, без ID и связей. Схема сохранения 3 удаляет старые object ID. Машина связывается только с объектом из собственного spawn-вызова PEREKUP и пока текущий поиск возвращает тот же Lua-объект. Callback требует совпадения career token и session binding proof; старый ID не используется для удаления, сохранения или reset.
 - UI App использует отдельные словари `ru`/`en` и хранит выбор языка в настройках приложения.
 - Процент состояния — экономическая оценка, а не чтение фактического повреждения игрового объекта. Подтверждённого публичного Lua API для этой телеметрии мод не использует.
 - Физический ремонт пока означает полный reset физики автомобиля, не починку отдельных деталей.
@@ -111,6 +112,7 @@ Prefer **locally available in-game preview images**; use placeholders or permitt
 - Keep UI copy in `ru`/`en` dictionaries and persist the selected locale in app settings.
 - Condition percentages are career estimates, not live damage readings. No verified public in-game Lua contract is used to read physical damage.
 - The implementation only deletes a returned world object after verifying the saved config and Beamstate checkpoint. Retrieval spawns that config and attempts to apply the compatible physical checkpoint; this is not an ordinary respawn presented as persistence.
+- Career vehicle IDs are persistent; numeric BeamNG object IDs and binding proofs exist only in runtime memory. During a GE Lua reload, `M.state` carries only a generation counter, never IDs or bindings. Save schema 3 removes legacy object IDs, and callbacks must match the current session binding before they can complete a world operation. Unbound objects are not saved, reset or deleted.
 - Beamstate and several vehicle-manager functions are internal APIs, not a stable official serialization contract. They are guarded, tested with mocks, and still need validation on a current BeamNG.drive PC. Third-party modules may keep state outside Beamstate's serialized packages.
 - The current physical repair performs a full vehicle physics reset rather than repairing individual parts. Career condition remains an estimate.
 - Day-one listings ensure that the starter sale can fund one listed vehicle and its estimated repair reserve, including a lower-condition starter-config offer when necessary.

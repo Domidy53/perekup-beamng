@@ -1,15 +1,25 @@
 local M = {}
 
-local extensionState = type(M.state) == "table" and M.state or {}
-extensionState.spawned = type(extensionState.spawned) == "table" and extensionState.spawned or {}
-extensionState.restoring = type(extensionState.restoring) == "table" and extensionState.restoring or {}
-extensionState.nextCallbackNumber = tonumber(extensionState.nextCallbackNumber) or 0
-M.state = extensionState
-
-local spawned = extensionState.spawned
-local restoring = extensionState.restoring
+-- These bindings are deliberately memory-only. A BeamNG object ID is valid only
+-- while this module still holds the object returned by PEREKUP's own spawn call.
+local bindings = {}
+local restoring = {}
+local runtimeCounter = 0
+local runtimeGeneration = 0
+local runtimeIdentity = "0_" .. tostring(os.time())
+  .. "_" .. tostring(math.floor(os.clock() * 1000000))
 local MAX_CONFIG_ITEMS = 12000
 local STATE_FOLDER = "settings/perekup_vehicle_states"
+
+function M.beginRuntime(generation)
+  runtimeGeneration = tonumber(generation) or 0
+  runtimeCounter = 0
+  bindings = {}
+  restoring = {}
+  runtimeIdentity = tostring(runtimeGeneration) .. "_" .. tostring(os.time())
+    .. "_" .. tostring(math.floor(os.clock() * 1000000))
+  return runtimeGeneration
+end
 
 local function readMember(object, name)
   local ok, value = pcall(function() return object and object[name] end)
@@ -44,6 +54,24 @@ local function objectId(object)
   value = ok and tonumber(value) or nil
   if not value or value ~= math.floor(value) or value < 0 then return nil end
   return value
+end
+
+local function nextRuntimeToken(prefix)
+  runtimeCounter = runtimeCounter + 1
+  return prefix .. runtimeIdentity .. "_" .. tostring(runtimeCounter)
+end
+
+local function boundObject(careerVehicleId)
+  local binding = bindings[careerVehicleId]
+  if type(binding) ~= "table" then return nil end
+  local current = getObjectById(binding.objectId)
+  if not current or not rawequal(current, binding.objectRef)
+    or objectId(binding.objectRef) ~= binding.objectId then
+    bindings[careerVehicleId] = nil
+    restoring[careerVehicleId] = nil
+    return nil
+  end
+  return binding, binding.objectRef
 end
 
 local function safeId(value)
@@ -118,8 +146,9 @@ local function sameData(left, right, seen)
   return true
 end
 
-function M.captureVehicleConfig(objectIdValue, expectedModel)
-  local id = tonumber(objectIdValue)
+function M.captureVehicleConfig(careerVehicleId, expectedModel)
+  local binding = boundObject(careerVehicleId)
+  local id = binding and binding.objectId or nil
   if not id or not safeId(expectedModel) then
     return nil, "Не удалось подтвердить автомобиль для чтения конфигурации."
   end
@@ -185,8 +214,7 @@ function M.makeStatePath(vehicleId, token, suffix)
   end
   local fs = rawget(_G, "FS")
   for attempt = 1, 8 do
-    extensionState.nextCallbackNumber = extensionState.nextCallbackNumber + 1
-    local nonce = tostring(os.time()) .. "_" .. tostring(extensionState.nextCallbackNumber) .. "_" .. tostring(attempt)
+    local nonce = runtimeIdentity .. "_" .. tostring(os.time()) .. "_" .. tostring(runtimeCounter + attempt)
     local path = STATE_FOLDER .. "/" .. vehicleId .. "_" .. token .. "_" .. nonce .. "_" .. suffix .. ".json"
     local ok, exists = pcall(function() return fs:fileExists(path) end)
     if ok and exists == false then return path end
@@ -227,53 +255,86 @@ function M.validateStateFile(path, expectedModel, configSnapshot)
 end
 
 function M.getObjectId(careerVehicleId)
-  local id = spawned[careerVehicleId]
-  if id == nil then return nil end
-  if getObjectById(id) then return id end
-  spawned[careerVehicleId] = nil
-  return nil
+  local binding = boundObject(careerVehicleId)
+  return binding and binding.objectId or nil
 end
 
-function M.objectExists(id)
-  return tonumber(id) ~= nil and getObjectById(tonumber(id)) ~= nil
+function M.getBindingToken(careerVehicleId)
+  local binding = boundObject(careerVehicleId)
+  return binding and binding.proof or nil
+end
+
+function M.isBound(careerVehicleId, objectIdValue, proof)
+  local binding = boundObject(careerVehicleId)
+  return binding ~= nil and binding.objectId == tonumber(objectIdValue)
+    and type(proof) == "string" and binding.proof == proof
+end
+
+function M.isCurrentOperation(careerVehicleId, objectIdValue, proof, operationToken, operationKind)
+  local binding = boundObject(careerVehicleId)
+  local operation = binding and binding.operation or nil
+  return binding ~= nil and binding.objectId == tonumber(objectIdValue)
+    and binding.proof == proof and type(operation) == "table"
+    and operation.token == operationToken and operation.kind == operationKind
 end
 
 function M.isInWorld(careerVehicleId)
   return M.getObjectId(careerVehicleId) ~= nil
 end
 
-local function queueStateRestore(careerVehicleId, objectIdValue, path, modelKey, configSnapshot)
-  local object = getObjectById(objectIdValue)
+local function queueBoundCommand(careerVehicleId, command, operationToken, operationKind)
+  local binding, object = boundObject(careerVehicleId)
+  if not binding then return false, nil, "У этой карьерной машины нет подтверждённого объекта текущей сессии." end
   local queue = readMember(object, "queueLuaCommand")
-  if type(queue) ~= "function" then return false, "Lua VM автомобиля недоступен для восстановления состояния." end
+  if type(queue) ~= "function" then return false, nil, "Lua VM автомобиля недоступен." end
+  local previousOperation = binding.operation
+  binding.operation = { token = operationToken, kind = operationKind }
+  local ok, result = pcall(queue, object, command)
+  if not ok or result == false then
+    if binding.operation.token == operationToken and binding.operation.kind == operationKind then
+      binding.operation = previousOperation
+    end
+    return false, nil, "Команда не была принята Lua VM автомобиля."
+  end
+  return true, binding.proof
+end
+
+local function queueStateRestore(careerVehicleId, path, modelKey, configSnapshot)
   if not M.validateStateFile(path, modelKey, configSnapshot) then
     return false, "Файл физического состояния повреждён или не соответствует конфигурации; автомобиль оставлен в гараже."
   end
-  extensionState.nextCallbackNumber = extensionState.nextCallbackNumber + 1
-  local token = "L" .. tostring(extensionState.nextCallbackNumber)
-  local command = "extensions.load('perekup_vehicle_state'); extensions.perekup_vehicle_state.restoreState("
-    .. string.format("%q", path) .. ", " .. string.format("%q", token) .. ")"
-  local ok, result = pcall(queue, object, command)
-  if not ok or result == false then return false, "Команда восстановления не была принята Lua VM автомобиля." end
+  local token = nextRuntimeToken("L")
+  local binding = bindings[careerVehicleId]
+  if not binding then return false, "Объект для восстановления больше не подтверждён." end
   restoring[careerVehicleId] = {
     token = token,
-    objectId = tonumber(objectIdValue),
+    objectId = binding.objectId,
+    proof = binding.proof,
     path = path,
-    modelKey = modelKey,
-    configSnapshot = configSnapshot,
     retries = 0,
     lastQueuedAt = os.clock()
   }
+  local command = "extensions.load('perekup_vehicle_state'); extensions.perekup_vehicle_state.restoreState("
+    .. string.format("%q", path) .. ", " .. string.format("%q", token) .. ", "
+    .. string.format("%q", binding.proof) .. ")"
+  local queued, _, queueError = queueBoundCommand(careerVehicleId, command, token, "restore")
+  if not queued then
+    restoring[careerVehicleId] = nil
+    return false, queueError
+  end
   return true, token
 end
 
-function M.finishStateRestore(token, objectIdValue, succeeded)
+function M.finishStateRestore(token, objectIdValue, proof, succeeded)
   local id = tonumber(objectIdValue)
   for careerVehicleId, pending in pairs(restoring) do
-    if pending.token == token and pending.objectId == id then
+    if pending.token == token and pending.objectId == id and pending.proof == proof
+      and M.isCurrentOperation(careerVehicleId, id, proof, token, "restore") then
       restoring[careerVehicleId] = nil
+      local binding = bindings[careerVehicleId]
+      binding.operation = nil
       if succeeded == true then return true, careerVehicleId end
-      M.returnToGarage(careerVehicleId)
+      M.returnToGarage(careerVehicleId, proof)
       return false, careerVehicleId
     end
   end
@@ -298,7 +359,7 @@ function M.spawn(careerVehicleId, config, configSnapshot, stateFile)
     return false, "Не удалось проверить сохранённое физическое состояние; автомобиль оставлен в гараже."
   end
   if type(core_vehicles) ~= "table" or type(core_vehicles.spawnNewVehicle) ~= "function" then
-    return false, "В этой версии BeamNG недоступен API появления автомобиля."
+    return false, "В этой версии игры недоступен API появления автомобиля."
   end
 
   local options = {
@@ -314,26 +375,20 @@ function M.spawn(careerVehicleId, config, configSnapshot, stateFile)
   if not id then
     return false, "Автомобиль появился без подтверждённого игрового идентификатора."
   end
-  spawned[careerVehicleId] = id
+  local proof = nextRuntimeToken("B")
+  bindings[careerVehicleId] = { objectId = id, objectRef = object, proof = proof }
+  if not boundObject(careerVehicleId) then
+    return false, "Игровой объект появился, но его текущую идентичность нельзя подтвердить. PEREKUP не будет управлять им; при необходимости удалите его вручную."
+  end
   if stateFile then
-    local queued, tokenOrError = queueStateRestore(careerVehicleId, id, stateFile, config.modelKey, configSnapshot)
+    local queued, tokenOrError = queueStateRestore(careerVehicleId, stateFile, config.modelKey, configSnapshot)
     if not queued then
-      local returned = M.returnToGarage(careerVehicleId)
-      if not returned then
-        return false, tokenOrError .. " Игровой объект остался в мире, но связь сохранена."
-      end
+      M.returnToGarage(careerVehicleId, proof)
       return false, tokenOrError
     end
-    return true, id, tokenOrError
+    return true, id, tokenOrError, proof
   end
-  return true, id
-end
-
-function M.adopt(careerVehicleId, objectIdValue)
-  local id = tonumber(objectIdValue)
-  if not safeId(careerVehicleId) or not id or not getObjectById(id) then return false end
-  spawned[careerVehicleId] = id
-  return true
+  return true, id, nil, proof
 end
 
 local function leaveVehicleIfActive(id)
@@ -353,101 +408,86 @@ local function leaveVehicleIfActive(id)
 end
 
 function M.prepareForStateSave(careerVehicleId)
-  local id = M.getObjectId(careerVehicleId)
-  if not id then return false, "Игровой объект автомобиля больше не существует." end
-  local safe, reason = leaveVehicleIfActive(id)
+  local binding = boundObject(careerVehicleId)
+  if not binding then return false, "Игровой объект этой карьерной машины не подтверждён в текущей сессии." end
+  local safe, reason = leaveVehicleIfActive(binding.objectId)
   if not safe then return false, reason end
-  return true, id
+  return true
 end
 
-function M.deleteObjectById(objectIdValue)
-  local id = tonumber(objectIdValue)
-  if not id then return false, "Некорректный идентификатор игрового объекта." end
-  local object = getObjectById(id)
-  if not object then
-    for careerVehicleId, spawnedId in pairs(spawned) do
-      if spawnedId == id then spawned[careerVehicleId] = nil end
-    end
-    for careerVehicleId, pending in pairs(restoring) do
-      if pending.objectId == id then restoring[careerVehicleId] = nil end
-    end
-    return true
+function M.returnToGarage(careerVehicleId, expectedProof)
+  local binding, object = boundObject(careerVehicleId)
+  if not binding then return true end
+  if expectedProof ~= nil and binding.proof ~= expectedProof then
+    return false, "Связь с объектом изменилась; объект оставлен без изменений."
   end
   local delete = readMember(object, "delete")
   if type(delete) ~= "function" then return false, "BeamNG не предоставил операцию удаления игрового объекта." end
-  local safe, reason = leaveVehicleIfActive(id)
+  local safe, reason = leaveVehicleIfActive(binding.objectId)
   if not safe then return false, reason end
+  local current = getObjectById(binding.objectId)
+  if not current or not rawequal(current, binding.objectRef) then
+    bindings[careerVehicleId] = nil
+    restoring[careerVehicleId] = nil
+    return false, "Игровой объект изменился после проверки; удаление остановлено."
+  end
+  binding.deleting = true
   local ok, result = pcall(delete, object)
-  if not ok or result == false then return false, "BeamNG не подтвердил возврат автомобиля в гараж." end
-  for careerVehicleId, spawnedId in pairs(spawned) do
-    if spawnedId == id then spawned[careerVehicleId] = nil end
+  if not ok or result == false then
+    binding.deleting = false
+    return false, "BeamNG не подтвердил возврат автомобиля в гараж."
   end
-  for careerVehicleId, pending in pairs(restoring) do
-    if pending.objectId == id then restoring[careerVehicleId] = nil end
-  end
+  bindings[careerVehicleId] = nil
+  restoring[careerVehicleId] = nil
   return true
 end
 
-function M.returnToGarage(careerVehicleId)
-  local id = M.getObjectId(careerVehicleId)
-  if not id then return true end
-  return M.deleteObjectById(id)
-end
-
-local function queueVehicleCommand(objectIdValue, command)
-  local object = getObjectById(objectIdValue)
-  local queue = readMember(object, "queueLuaCommand")
-  if type(queue) ~= "function" then return false end
-  local ok, result = pcall(queue, object, command)
-  return ok and result ~= false
-end
-
-function M.queueStateSave(objectIdValue, path, token, kind)
-  local id = tonumber(objectIdValue)
-  if not id or not safeStatePath(path) or not safeId(token)
+function M.queueStateSave(careerVehicleId, path, token, kind)
+  if not safeId(careerVehicleId) or not safeStatePath(path) or not safeId(token)
     or (kind ~= "store" and kind ~= "repair_checkpoint") then
     return false, "Некорректный запрос физического сохранения."
   end
+  local binding = bindings[careerVehicleId]
+  if not binding then return false, "Сохранение остановлено: объект не подтверждён PEREKUP в этой сессии." end
   local command = "extensions.load('perekup_vehicle_state'); extensions.perekup_vehicle_state.saveState("
-    .. string.format("%q", path) .. ", " .. string.format("%q", token) .. ", " .. string.format("%q", kind) .. ")"
-  if not queueVehicleCommand(id, command) then
-    return false, "Команда сохранения не была принята Lua VM автомобиля."
-  end
-  return true
+    .. string.format("%q", path) .. ", " .. string.format("%q", token) .. ", "
+    .. string.format("%q", kind) .. ", " .. string.format("%q", binding.proof) .. ")"
+  local queued, _, queueError = queueBoundCommand(careerVehicleId, command, token, kind)
+  if not queued then return false, queueError end
+  return true, binding.proof
 end
 
-function M.queueRepair(objectIdValue, token, postStateFile)
-  local id = tonumber(objectIdValue)
-  if not id or not safeId(token) or not safeStatePath(postStateFile) then
+function M.queueRepair(careerVehicleId, token, postStateFile)
+  if not safeId(careerVehicleId) or not safeId(token) or not safeStatePath(postStateFile) then
     return false, "Некорректный идентификатор ремонта."
   end
+  local binding = bindings[careerVehicleId]
+  if not binding then return false, "Ремонт остановлен: объект не подтверждён PEREKUP в этой сессии." end
   local command = "extensions.load('perekup_vehicle_state'); extensions.perekup_vehicle_state.requestRepair("
-    .. string.format("%q", token) .. ", " .. string.format("%q", postStateFile) .. ")"
-  if not queueVehicleCommand(id, command) then
-    return false, "Команда ремонта не была принята автомобильным Lua VM."
-  end
-  return true
+    .. string.format("%q", token) .. ", " .. string.format("%q", postStateFile) .. ", "
+    .. string.format("%q", binding.proof) .. ")"
+  local queued, _, queueError = queueBoundCommand(careerVehicleId, command, token, "repair")
+  if not queued then return false, queueError end
+  return true, binding.proof
 end
 
 function M.onUpdate()
   local now = os.clock()
   for careerVehicleId, pending in pairs(restoring) do
-    if now - (pending.lastQueuedAt or 0) > 20 and pending.retries < 10 then
-      if M.objectExists(pending.objectId) then
-        local object = getObjectById(pending.objectId)
-        local queue = readMember(object, "queueLuaCommand")
-        if type(queue) == "function" then
-          local command = "extensions.load('perekup_vehicle_state'); extensions.perekup_vehicle_state.restoreState("
-            .. string.format("%q", pending.path) .. ", " .. string.format("%q", pending.token) .. ")"
-          local ok, result = pcall(queue, object, command)
-          if ok and result ~= false then
-            pending.lastQueuedAt = now
-            pending.retries = pending.retries + 1
-          end
+    local binding, object = boundObject(careerVehicleId)
+    if not binding or binding.objectId ~= pending.objectId or binding.proof ~= pending.proof then
+      restoring[careerVehicleId] = nil
+    elseif now - (pending.lastQueuedAt or 0) > 20 and pending.retries < 10 then
+      local queue = readMember(object, "queueLuaCommand")
+      if type(queue) == "function" then
+        local command = "extensions.load('perekup_vehicle_state'); extensions.perekup_vehicle_state.restoreState("
+          .. string.format("%q", pending.path) .. ", " .. string.format("%q", pending.token) .. ", "
+          .. string.format("%q", pending.proof) .. ")"
+        local ok, result = pcall(queue, object, command)
+        if ok and result ~= false then
+          pending.lastQueuedAt = now
+          pending.retries = pending.retries + 1
         end
-      else
-        restoring[careerVehicleId] = nil
-        spawned[careerVehicleId] = nil
       end
     end
   end
@@ -455,13 +495,26 @@ end
 
 function M.onVehicleDestroyed(id)
   id = tonumber(id)
-  if not id then return end
-  for careerVehicleId, spawnedId in pairs(spawned) do
-    if spawnedId == id then spawned[careerVehicleId] = nil end
+  if not id then return {} end
+  local affected = {}
+  for careerVehicleId, binding in pairs(bindings) do
+    if binding.objectId == id then
+      local current = getObjectById(id)
+      -- A destruction hook carries only a numeric ID. If that ID has already
+      -- been reused, do not discard a live binding to the new object. A hook
+      -- fired before removal is handled by the next boundObject check.
+      if not binding.deleting and not (current and rawequal(current, binding.objectRef)) then
+        affected[#affected + 1] = {
+          careerVehicleId = careerVehicleId,
+          proof = binding.proof,
+          operation = binding.operation
+        }
+        bindings[careerVehicleId] = nil
+        restoring[careerVehicleId] = nil
+      end
+    end
   end
-  for careerVehicleId, pending in pairs(restoring) do
-    if pending.objectId == id then restoring[careerVehicleId] = nil end
-  end
+  return affected
 end
 
 return M

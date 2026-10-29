@@ -69,35 +69,35 @@ local function readValidBeamstate(path)
   return saved
 end
 
-local function reportGameEngine(functionName, token, objectId, kind, succeeded, resultCode)
-  if obj == nil or type(obj.queueGameEngineLua) ~= "function" then return false end
+local function reportGameEngine(functionName, token, objectId, kind, succeeded, resultCode, bindingProof)
+  if obj == nil or type(obj.queueGameEngineLua) ~= "function" or not safeToken(bindingProof) then return false end
   local command
-  if type(kind) == "string" then
-    command = string.format("extensions.perekup_core.%s(%q, %d, %q, %s)",
-      functionName, token, objectId, kind, tostring(succeeded))
-  elseif resultCode then
-    command = string.format("extensions.perekup_core.%s(%q, %d, %s, %q)",
-      functionName, token, objectId, tostring(succeeded), resultCode)
+  if functionName == "onVehicleStateSaved" then
+    command = string.format("extensions.perekup_core.%s(%q, %d, %q, %s, %q)",
+      functionName, token, objectId, kind, tostring(succeeded), bindingProof)
+  elseif functionName == "onRepairResult" then
+    command = string.format("extensions.perekup_core.%s(%q, %d, %s, %q, %q)",
+      functionName, token, objectId, tostring(succeeded), resultCode, bindingProof)
   else
-    command = string.format("extensions.perekup_core.%s(%q, %d, %s)",
-      functionName, token, objectId, tostring(succeeded))
+    command = string.format("extensions.perekup_core.%s(%q, %d, %s, %q)",
+      functionName, token, objectId, tostring(succeeded), bindingProof)
   end
   local ok, result = pcall(obj.queueGameEngineLua, obj, command)
   return ok and result ~= false
 end
 
-local function requestSave(path, token, kind)
+local function requestSave(path, token, kind, bindingProof)
   local objectId = currentVehicleId()
-  local key = tostring(token) .. ":" .. tostring(kind) .. ":" .. tostring(path) .. ":" .. tostring(objectId)
+  local key = tostring(token) .. ":" .. tostring(kind) .. ":" .. tostring(path) .. ":" .. tostring(objectId) .. ":" .. tostring(bindingProof)
   if completedSaves[key] then
-    reportGameEngine("onVehicleStateSaved", token, objectId, kind, true)
+    reportGameEngine("onVehicleStateSaved", token, objectId, kind, true, nil, bindingProof)
     return true
   end
-  if not safeToken(token) or not safePath(path) or objectId == nil
+  if not safeToken(token) or not safeToken(bindingProof) or not safePath(path) or objectId == nil
     or (kind ~= "store" and kind ~= "repair_checkpoint")
     or type(beamstate) ~= "table" or type(beamstate.save) ~= "function" then
     if safeToken(token) and objectId then
-      reportGameEngine("onVehicleStateSaved", token, objectId, kind, false)
+      reportGameEngine("onVehicleStateSaved", token, objectId, kind, false, nil, bindingProof)
     end
     return false
   end
@@ -105,33 +105,33 @@ local function requestSave(path, token, kind)
   local savedOk, saveResult = pcall(beamstate.save, path)
   local verified = savedOk and saveResult ~= false and readValidBeamstate(path) ~= nil
   if verified then completedSaves[key] = true end
-  reportGameEngine("onVehicleStateSaved", token, objectId, kind, verified)
+  reportGameEngine("onVehicleStateSaved", token, objectId, kind, verified, nil, bindingProof)
   return verified
 end
 
-function M.saveState(path, token, kind)
-  return requestSave(path, token, kind)
+function M.saveState(path, token, kind, bindingProof)
+  return requestSave(path, token, kind, bindingProof)
 end
 
-function M.restoreState(path, token)
+function M.restoreState(path, token, bindingProof)
   local objectId = currentVehicleId()
-  local key = tostring(token) .. ":" .. tostring(path) .. ":" .. tostring(objectId)
+  local key = tostring(token) .. ":" .. tostring(path) .. ":" .. tostring(objectId) .. ":" .. tostring(bindingProof)
   if completedRestores[key] then
-    reportGameEngine("onVehicleStateRestored", token, objectId, nil, true)
+    reportGameEngine("onVehicleStateRestored", token, objectId, nil, true, nil, bindingProof)
     return true
   end
-  if not safeToken(token) or not safePath(path) or objectId == nil
+  if not safeToken(token) or not safeToken(bindingProof) or not safePath(path) or objectId == nil
     or type(beamstate) ~= "table" or type(beamstate.load) ~= "function"
     or not readValidBeamstate(path) then
     if safeToken(token) and objectId then
-      reportGameEngine("onVehicleStateRestored", token, objectId, nil, false)
+      reportGameEngine("onVehicleStateRestored", token, objectId, nil, false, nil, bindingProof)
     end
     return false
   end
   local loadedOk, loadResult = pcall(beamstate.load, path)
   local loaded = loadedOk and loadResult ~= false
   if loaded then completedRestores[key] = true end
-  reportGameEngine("onVehicleStateRestored", token, objectId, nil, loaded)
+  reportGameEngine("onVehicleStateRestored", token, objectId, nil, loaded, nil, bindingProof)
   return loaded
 end
 
@@ -144,21 +144,21 @@ local function saveCompletedRepair()
   pendingRepair = nil
   completedRepair = finished
   repairRetryElapsed = 0
-  reportGameEngine("onRepairResult", finished.token, finished.objectId, nil, true, "saved")
+  reportGameEngine("onRepairResult", finished.token, finished.objectId, nil, true, "saved", finished.bindingProof)
   return true
 end
 
-function M.requestRepair(token, postStateFile)
+function M.requestRepair(token, postStateFile, bindingProof)
   local objectId = currentVehicleId()
-  if not safeToken(token) or not safePath(postStateFile) or objectId == nil then return false end
+  if not safeToken(token) or not safeToken(bindingProof) or not safePath(postStateFile) or objectId == nil then return false end
   if completedRepair and completedRepair.token == token and completedRepair.objectId == objectId
-    and completedRepair.postStateFile == postStateFile then
-    reportGameEngine("onRepairResult", token, objectId, nil, true, "saved")
+    and completedRepair.postStateFile == postStateFile and completedRepair.bindingProof == bindingProof then
+    reportGameEngine("onRepairResult", token, objectId, nil, true, "saved", bindingProof)
     return true
   end
   if pendingRepair then
     if pendingRepair.token ~= token or pendingRepair.objectId ~= objectId
-      or pendingRepair.postStateFile ~= postStateFile then
+      or pendingRepair.postStateFile ~= postStateFile or pendingRepair.bindingProof ~= bindingProof then
       return false
     end
     if pendingRepair.resetDone then saveCompletedRepair() end
@@ -166,13 +166,14 @@ function M.requestRepair(token, postStateFile)
   end
   if RESET_PHYSICS == nil or type(obj.requestReset) ~= "function"
     or type(beamstate) ~= "table" or type(beamstate.save) ~= "function" then
-    reportGameEngine("onRepairResult", token, objectId, nil, false, "rejected")
+    reportGameEngine("onRepairResult", token, objectId, nil, false, "rejected", bindingProof)
     return false
   end
 
   pendingRepair = {
     token = token,
     objectId = objectId,
+    bindingProof = bindingProof,
     postStateFile = postStateFile,
     resetDone = false
   }
@@ -180,7 +181,7 @@ function M.requestRepair(token, postStateFile)
   local ok, result = pcall(obj.requestReset, obj, RESET_PHYSICS)
   if not ok or result == false then
     pendingRepair = nil
-    reportGameEngine("onRepairResult", token, objectId, nil, false, "rejected")
+    reportGameEngine("onRepairResult", token, objectId, nil, false, "rejected", bindingProof)
     return false
   end
   if type(obj.resetBrokenFlexMesh) == "function" then

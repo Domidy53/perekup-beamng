@@ -119,7 +119,7 @@ function M.start(config, configs)
   end
 
   local state = {
-    schema = 2,
+    schema = 3,
     started = true,
     money = 500,
     day = 1,
@@ -222,13 +222,11 @@ function M.repair(state, vehicleId)
   return true
 end
 
-function M.beginPhysicalRepair(state, vehicleId, objectId, configSnapshot, preStateFile, postStateFile)
+function M.beginPhysicalRepair(state, vehicleId, configSnapshot, preStateFile, postStateFile)
   if state.pendingRepair then
     return false, "Дождитесь завершения текущего ремонта."
   end
-  if not safeId(vehicleId) or not integer(tonumber(objectId), 0, MAX_BALANCE) then
-    return false, "Не удалось подтвердить игровую машину для ремонта."
-  end
+  if not safeId(vehicleId) then return false, "Не удалось подтвердить карьерную машину для ремонта." end
   local vehicle = Garage.findById(state.vehicles, vehicleId)
   if not vehicle or vehicle.status ~= "owned" or vehicle.repairUsed or vehicle.condition >= 100 then
     return false, "Эту машину сейчас нельзя ремонтировать."
@@ -249,7 +247,6 @@ function M.beginPhysicalRepair(state, vehicleId, objectId, configSnapshot, preSt
   state.pendingRepair = {
     token = "R" .. tostring(operationNumber),
     vehicleId = vehicleId,
-    objectId = tonumber(objectId),
     phase = "checkpoint",
     configSnapshot = M.copy(configSnapshot),
     preStateFile = preStateFile,
@@ -267,16 +264,6 @@ function M.startPhysicalRepair(state, token)
     return false, "Checkpoint ремонта устарел или уже обработан."
   end
   pending.phase = "reset"
-  return true
-end
-
-function M.attachPhysicalRepairObject(state, token, objectId)
-  local pending = state.pendingRepair
-  if type(pending) ~= "table" or pending.token ~= token or pending.phase ~= "reset"
-    or not integer(tonumber(objectId), 0, MAX_BALANCE) then
-    return false, "Не удалось перепривязать незавершённый ремонт к игровому объекту."
-  end
-  pending.objectId = tonumber(objectId)
   return true
 end
 
@@ -303,13 +290,12 @@ function M.completePhysicalRepair(state, token)
   return true
 end
 
-function M.beginVehicleStore(state, vehicleId, objectId, configSnapshot, stateFile)
+function M.beginVehicleStore(state, vehicleId, configSnapshot, stateFile)
   if state.pendingStore or state.pendingRepair then
     return false, "Дождитесь завершения текущей операции с автомобилем."
   end
-  if not safeId(vehicleId) or not integer(tonumber(objectId), 0, MAX_BALANCE)
-    or not validStatePath(stateFile) then
-    return false, "Не удалось подтвердить автомобиль и путь его физического сохранения."
+  if not safeId(vehicleId) or not validStatePath(stateFile) then
+    return false, "Не удалось подтвердить карьерную машину и путь её физического сохранения."
   end
   local vehicle = Garage.findById(state.vehicles, vehicleId)
   if not vehicle or vehicle.status ~= "owned" or not validConfigSnapshot(configSnapshot, vehicle.modelKey) then
@@ -324,7 +310,6 @@ function M.beginVehicleStore(state, vehicleId, objectId, configSnapshot, stateFi
   state.pendingStore = {
     token = token,
     vehicleId = vehicleId,
-    objectId = tonumber(objectId),
     configSnapshot = M.copy(configSnapshot),
     stateFile = stateFile
   }
@@ -410,7 +395,7 @@ function M.advanceDay(state, configs)
 end
 
 function M.isValidState(state)
-  if type(state) ~= "table" or (state.schema ~= 1 and state.schema ~= 2) or state.started ~= true then
+  if type(state) ~= "table" or (state.schema ~= 1 and state.schema ~= 2 and state.schema ~= 3) or state.started ~= true then
     return false
   end
   if not integer(state.money, 0, MAX_BALANCE) or not integer(state.day, 1, 10000000) then
@@ -440,6 +425,7 @@ function M.isValidState(state)
       or (vehicle.status ~= "owned" and vehicle.status ~= "for_sale" and vehicle.status ~= "sold") then
       return false
     end
+    if state.schema >= 3 and (vehicle.objectId ~= nil or vehicle.worldObjectId ~= nil) then return false end
     if state.schema >= 2 then
       if vehicle.configSnapshot ~= nil and not validConfigSnapshot(vehicle.configSnapshot, vehicle.modelKey) then
         return false
@@ -457,7 +443,9 @@ function M.isValidState(state)
     local pending = state.pendingRepair
     local vehicle = type(pending) == "table" and Garage.findById(state.vehicles, pending.vehicleId) or nil
     if type(pending) ~= "table" or not safeId(pending.token) or not safeId(pending.vehicleId)
-      or not integer(pending.objectId, 0, MAX_BALANCE) or not integer(pending.cost, 75, MAX_BALANCE)
+      or (state.schema < 3 and not integer(pending.objectId, 0, MAX_BALANCE))
+      or (state.schema >= 3 and pending.objectId ~= nil)
+      or not integer(pending.cost, 75, MAX_BALANCE)
       or not integer(pending.conditionAfter, 0, 100) or not integer(pending.repairCostAfter, 0, MAX_BALANCE)
       or not vehicle or vehicle.status ~= "owned" or vehicle.repairUsed or state.money < pending.cost then
       return false
@@ -475,7 +463,9 @@ function M.isValidState(state)
     local pending = state.pendingStore
     local vehicle = type(pending) == "table" and Garage.findById(state.vehicles, pending.vehicleId) or nil
     if state.schema < 2 or type(pending) ~= "table" or not safeId(pending.token)
-      or not safeId(pending.vehicleId) or not integer(pending.objectId, 0, MAX_BALANCE)
+      or not safeId(pending.vehicleId)
+      or (state.schema < 3 and not integer(pending.objectId, 0, MAX_BALANCE))
+      or (state.schema >= 3 and pending.objectId ~= nil)
       or not validStatePath(pending.stateFile) or not vehicle or vehicle.status ~= "owned"
       or not validConfigSnapshot(pending.configSnapshot, vehicle.modelKey) then
       return false
@@ -512,23 +502,35 @@ function M.isValidState(state)
 end
 
 function M.upgradeState(state)
-  if type(state) ~= "table" or state.schema ~= 1 then
+  if type(state) ~= "table" or (state.schema ~= 1 and state.schema ~= 2) then
     return state, false, nil
   end
   local upgraded = M.copy(state)
-  upgraded.schema = 2
   upgraded.nextOperationNumber = tonumber(upgraded.nextOperationNumber) or 1
-  upgraded.pendingStore = nil
-  for _, vehicle in ipairs(upgraded.vehicles or {}) do
-    vehicle.configSnapshot = nil
-    vehicle.beamStateFile = nil
-  end
   local warning
-  if upgraded.pendingRepair then
-    upgraded.pendingRepair = nil
-    record(upgraded, "repair_recovery", "Незавершённый ремонт старого сохранения отменён без списания: в нём нет проверенного физического checkpoint.", 0)
-    warning = "Незавершённый ремонт прежнего формата отменён без списания."
+  if upgraded.schema == 1 then
+    upgraded.pendingStore = nil
+    for _, vehicle in ipairs(upgraded.vehicles or {}) do
+      vehicle.configSnapshot = nil
+      vehicle.beamStateFile = nil
+      vehicle.objectId = nil
+      vehicle.worldObjectId = nil
+    end
+    if upgraded.pendingRepair then
+      upgraded.pendingRepair = nil
+      record(upgraded, "repair_recovery", "Незавершённый ремонт старого сохранения отменён без списания: в нём нет проверенного физического checkpoint.", 0)
+      warning = "Незавершённый ремонт прежнего формата отменён без списания."
+    end
+  else
+    if upgraded.pendingStore then upgraded.pendingStore.objectId = nil end
+    if upgraded.pendingRepair then upgraded.pendingRepair.objectId = nil end
+    for _, vehicle in ipairs(upgraded.vehicles or {}) do
+      vehicle.objectId = nil
+      vehicle.worldObjectId = nil
+    end
+    warning = "Сохранённые игровые ID удалены: после перезапуска они не подтверждают принадлежность машины. Операции будут восстановлены только по карьерным данным и checkpoint-файлам."
   end
+  upgraded.schema = 3
   return upgraded, true, warning
 end
 

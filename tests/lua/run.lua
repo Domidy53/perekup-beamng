@@ -128,6 +128,12 @@ test("career starts with 500 dollars and a dynamic starter vehicle", function()
   truthy(Career.isValidState(state))
 end)
 
+test("schema three rejects persistent BeamNG object IDs", function()
+  local contaminated = Career.copy(state)
+  contaminated.vehicles[1].worldObjectId = 99
+  equal(Career.isValidState(contaminated), false, "session IDs must stay out of persistent career records")
+end)
+
 test("starter sale always leaves a day-one offer plus its repair reserve", function()
   local config = {
     id = "reserve_test_1", modelKey = "reserve_car", configKey = "reserve.base",
@@ -322,6 +328,7 @@ test("vehicle state adapter verifies serialization, restores compatibly, and ret
     end
   }
   RESET_PHYSICS = 73
+  local bindingProof = "B_unit_73"
   obj = {
     getID = function() return 4242 end,
     requestReset = function(_, value)
@@ -338,40 +345,40 @@ test("vehicle state adapter verifies serialization, restores compatibly, and ret
   package.loaded["perekup_vehicle_state"] = nil
   local vehicleState = dofile("lua/vehicle/extensions/perekup_vehicle_state.lua")
   local statePath = "settings/perekup_vehicle_states/unit_state.json"
-  truthy(vehicleState.saveState(statePath, "S73", "store"))
-  truthy(callbacks[#callbacks]:find('onVehicleStateSaved("S73", 4242, "store", true)', 1, true))
+  truthy(vehicleState.saveState(statePath, "S73", "store", bindingProof))
+  truthy(callbacks[#callbacks]:find('onVehicleStateSaved("S73", 4242, "store", true, "B_unit_73")', 1, true))
   local saveCalls = #callbacks
-  truthy(vehicleState.saveState(statePath, "S73", "store"))
+  truthy(vehicleState.saveState(statePath, "S73", "store", bindingProof))
   equal(#callbacks, saveCalls + 1, "a repeated save must re-ack the same verified file")
-  truthy(vehicleState.restoreState(statePath, "L73"))
+  truthy(vehicleState.restoreState(statePath, "L73", bindingProof))
   equal(loadCount, 1)
-  truthy(vehicleState.restoreState(statePath, "L73"))
+  truthy(vehicleState.restoreState(statePath, "L73", bindingProof))
   equal(loadCount, 1, "restore token replay must not load the same state twice")
 
   local postPath = "settings/perekup_vehicle_states/unit_repair_post.json"
   local callbacksBeforeRepair = #callbacks
-  truthy(vehicleState.requestRepair("R73", postPath))
+  truthy(vehicleState.requestRepair("R73", postPath, bindingProof))
   equal(resetCount, 1)
   vehicleState.onReset()
   equal(#callbacks, callbacksBeforeRepair, "the reset hook schedules a post-reset save on the next vehicle update")
   vehicleState.updateGFX(0.1)
-  truthy(callbacks[#callbacks]:find('onRepairResult("R73", 4242, true, "saved")', 1, true))
-  truthy(vehicleState.requestRepair("R73", postPath))
+  truthy(callbacks[#callbacks]:find('onRepairResult("R73", 4242, true, "saved", "B_unit_73")', 1, true))
+  truthy(vehicleState.requestRepair("R73", postPath, bindingProof))
   equal(resetCount, 1, "a completed repair token must not reset twice")
 
   saveAllowed = false
-  truthy(vehicleState.requestRepair("R74", "settings/perekup_vehicle_states/retry_post.json"))
+  truthy(vehicleState.requestRepair("R74", "settings/perekup_vehicle_states/retry_post.json", bindingProof))
   vehicleState.onReset()
   local callbackCount = #callbacks
   vehicleState.updateGFX(5)
   equal(#callbacks, callbackCount, "failed post-reset file verification must not claim success")
   saveAllowed = true
   vehicleState.updateGFX(5)
-  truthy(callbacks[#callbacks]:find('onRepairResult("R74", 4242, true, "saved")', 1, true))
+  truthy(callbacks[#callbacks]:find('onRepairResult("R74", 4242, true, "saved", "B_unit_73")', 1, true))
 
   obj.requestReset = function() return false end
-  equal(vehicleState.requestRepair("R75", "settings/perekup_vehicle_states/rejected_post.json"), false)
-  truthy(callbacks[#callbacks]:find('onRepairResult("R75", 4242, false, "rejected")', 1, true))
+  equal(vehicleState.requestRepair("R75", "settings/perekup_vehicle_states/rejected_post.json", bindingProof), false)
+  truthy(callbacks[#callbacks]:find('onRepairResult("R75", 4242, false, "rejected", "B_unit_73")', 1, true))
 end)
 
 test("schema-one pending repair migrates without a debit when its physical checkpoint is unknown", function()
@@ -393,15 +400,16 @@ test("schema-one pending repair migrates without a debit when its physical check
   local upgraded, changed, warning = Career.upgradeState(legacy)
   truthy(changed)
   truthy(warning)
-  equal(upgraded.schema, 2)
+  equal(upgraded.schema, 3)
   equal(upgraded.pendingRepair, nil)
   equal(upgraded.money, before)
   truthy(Career.isValidState(upgraded))
 end)
 
-test("BeamNG adapter persists physical state and recovers repair/store after lost acknowledgements and changed object IDs", function()
+test("BeamNG adapter rejects reused foreign IDs and recovers saves and repairs after restart", function()
   local files, lastEvent = {}, nil
   local rejectGameSaveWrites = false
+  local destroyHookCore
   FS = {
     fileExists = function(_, path) return files[path] ~= nil end,
     fileSize = function(_, path) return files[path] and 128 or 0 end,
@@ -444,6 +452,7 @@ test("BeamNG adapter persists physical state and recovers repair/store after los
     package.loaded["perekup_core"] = nil
     local core = require("perekup_core")
     core.onExtensionLoaded()
+    destroyHookCore = core
     return core
   end
 
@@ -469,7 +478,7 @@ test("BeamNG adapter persists physical state and recovers repair/store after los
     local id = nextObjectId
     nextObjectId, spawnCount = nextObjectId + 1, spawnCount + 1
     local key = type(options.config) == "string" and options.config or "default"
-    local object = { queuedCommands = {}, config = configSnapshot(modelKey, key, options.config) }
+    local object = { queuedCommands = {}, deleteCount = 0, config = configSnapshot(modelKey, key, options.config) }
     object.getID = function() return id end
     object.queueLuaCommand = function(_, command)
       object.queuedCommands[#object.queuedCommands + 1] = command
@@ -477,12 +486,29 @@ test("BeamNG adapter persists physical state and recovers repair/store after los
     end
     object.delete = function()
       equal(activeObjectId == id, false, "the player vehicle must be exited before deletion")
+      object.deleteCount = object.deleteCount + 1
       worldObjects[id] = nil
+      if destroyHookCore then destroyHookCore.onVehicleDestroyed(id) end
       return true
     end
     worldObjects[id] = object
     if options.autoEnterVehicle then activeObjectId = id end
     return object
+  end
+  local function placeForeignObject(id, modelKey, configKey)
+    local foreign = { queuedCommands = {}, deleteCount = 0, config = configSnapshot(modelKey, configKey) }
+    foreign.getID = function() return id end
+    foreign.queueLuaCommand = function(_, command)
+      foreign.queuedCommands[#foreign.queuedCommands + 1] = command
+      return true
+    end
+    foreign.delete = function()
+      foreign.deleteCount = foreign.deleteCount + 1
+      worldObjects[id] = nil
+      return true
+    end
+    worldObjects[id] = foreign
+    return foreign
   end
   core_vehicles = {
     getModelList = function(asArray)
@@ -518,6 +544,10 @@ test("BeamNG adapter persists physical state and recovers repair/store after los
   end
 
   local GameCore = newCore()
+  local initialRuntimeGeneration = GameCore.state.runtimeGeneration
+  truthy(initialRuntimeGeneration)
+  equal(GameCore.state.objectId, nil, "extension reload state must not retain object IDs")
+  equal(GameCore.state.spawned, nil, "extension reload state must not retain old object bindings")
   truthy(refreshCore(GameCore))
   equal(lastEvent.status, "new")
   equal(#lastEvent.starterOptions, 3)
@@ -532,6 +562,8 @@ test("BeamNG adapter persists physical state and recovers repair/store after los
   equal(lastEvent.career.money, 500)
   local starterId = lastEvent.career.starterVehicleId
   local starterObjectId = lastEvent.career.vehicles[1].worldObjectId
+  local starterBindingProof = World.getBindingToken(starterId)
+  truthy(starterBindingProof)
   equal(lastEvent.career.vehicles[1].inWorld, true)
   equal(GameCore.sellVehicle(starterId), false)
   equal(lastEvent.career.money, 500)
@@ -540,14 +572,33 @@ test("BeamNG adapter persists physical state and recovers repair/store after los
   equal(lastEvent.pendingStore.status, "saving")
   equal(lastEvent.career.vehicles[1].inWorld, true, "the object must remain until the physical file is verified")
   local storePending = Career.copy(lastSavedCareer().pendingStore)
+  equal(storePending.objectId, nil, "pending career operations must never persist an engine object ID")
   seedStateFile(storePending.stateFile, storePending.configSnapshot, 77)
+  local foreignAfterStoreRestart = placeForeignObject(starterObjectId, "car_b", "foreign.same-id")
+  local legacyPendingStore = Career.copy(lastSavedCareer())
+  legacyPendingStore.schema = 2
+  legacyPendingStore.pendingStore.objectId = starterObjectId
+  legacyPendingStore.vehicles[1].worldObjectId = starterObjectId
+  files[Storage.SAVE_PATH] = legacyPendingStore
+  local storeReloadGeneration = GameCore.state.runtimeGeneration
+  package.loaded["perekup/world"] = nil
+  World = require("perekup/world")
   GameCore = newCore()
+  truthy(GameCore.state.runtimeGeneration > storeReloadGeneration,
+    "a Lua extension reload must invalidate prior callback proofs")
+  equal(GameCore.state.objectId, nil)
+  equal(GameCore.state.spawned, nil)
   equal(lastEvent.pendingStore, nil, "a valid file must recover even when its save acknowledgement was lost")
   equal(lastEvent.career.vehicles[1].inWorld, false)
+  equal(lastSavedCareer().schema, 3, "migration must remove legacy session object IDs")
+  equal(lastSavedCareer().vehicles[1].worldObjectId, nil)
+  equal(foreignAfterStoreRestart.deleteCount, 0, "a reused object ID must never delete a foreign car")
+  equal(#foreignAfterStoreRestart.queuedCommands, 0, "a reused object ID must never receive a command")
+  equal(worldObjects[starterObjectId], foreignAfterStoreRestart, "the colliding object must remain in the world")
   equal(lastSavedCareer().vehicles[1].configSnapshot.parts.engine, storePending.configSnapshot.parts.engine)
   equal(lastSavedCareer().vehicles[1].beamStateFile, storePending.stateFile)
   local balanceAfterStore = lastEvent.career.money
-  equal(GameCore.onVehicleStateSaved(storePending.token, starterObjectId, "store", true), false)
+  equal(GameCore.onVehicleStateSaved(storePending.token, starterObjectId, "store", true, starterBindingProof), false)
   equal(lastEvent.career.money, balanceAfterStore, "a replayed completed store acknowledgement must not mutate the career")
 
   truthy(GameCore.listVehicle(starterId))
@@ -587,26 +638,84 @@ test("BeamNG adapter persists physical state and recovers repair/store after los
 
   truthy(GameCore.repairVehicle(boughtId))
   local failedCheckpoint = Career.copy(lastSavedCareer().pendingRepair)
+  local failedCheckpointProof = World.getBindingToken(boughtId)
+  equal(failedCheckpoint.objectId, nil)
   equal(lastEvent.career.money, beforeRepair)
   equal(GameCore.repairVehicle(boughtId), false)
   equal(GameCore.advanceDay(), false)
   destroyObject(GameCore, oldObjectId)
   equal(lastSavedCareer().pendingRepair, nil, "a lost pre-checkpoint object can be cancelled without charging")
   equal(lastEvent.career.vehicles[2].repairUsed, false)
-  equal(GameCore.onRepairResult(failedCheckpoint.token, oldObjectId, true, "saved"), false)
+  equal(GameCore.onRepairResult(failedCheckpoint.token, oldObjectId, true, "saved", failedCheckpointProof), false)
 
   truthy(GameCore.retrieveVehicle(boughtId))
   oldObjectId = lastEvent.career.vehicles[2].worldObjectId
   truthy(GameCore.repairVehicle(boughtId))
   local repairPending = Career.copy(lastSavedCareer().pendingRepair)
+  local repairBindingProof = World.getBindingToken(boughtId)
+  equal(repairPending.objectId, nil)
   seedStateFile(repairPending.preStateFile, repairPending.configSnapshot, 91)
-  truthy(GameCore.onVehicleStateSaved(repairPending.token, oldObjectId, "repair_checkpoint", true))
+  truthy(GameCore.onVehicleStateSaved(repairPending.token, oldObjectId, "repair_checkpoint", true, repairBindingProof))
   equal(lastSavedCareer().pendingRepair.phase, "reset")
   equal(lastEvent.career.money, beforeRepair)
 
   destroyObject(GameCore, oldObjectId)
   truthy(lastSavedCareer().pendingRepair, "a possibly started reset survives loss of its old object ID")
   equal(lastEvent.career.money, beforeRepair)
+  local staleRestoreSpawned, staleRestoreObjectId = World.spawn(
+    "stale_restore_probe", { modelKey = "car_b", configKey = "foreign.probe" },
+    repairPending.configSnapshot, repairPending.preStateFile)
+  truthy(staleRestoreSpawned)
+  local staleRestoreProof = World.getBindingToken("stale_restore_probe")
+  local staleRestoreCommand = worldObjects[staleRestoreObjectId].queuedCommands[1]
+  local staleRestoreToken = staleRestoreCommand
+    and staleRestoreCommand:match('restoreState%([^,]+,%s*"([A-Za-z0-9_%-]+)"')
+  truthy(staleRestoreProof)
+  truthy(staleRestoreToken)
+  destroyObject(GameCore, staleRestoreObjectId)
+  local foreignAfterRepairRestart = placeForeignObject(oldObjectId, "car_b", "foreign.repair.same-id")
+  local foreignAfterRestoreRestart = placeForeignObject(staleRestoreObjectId, "car_b", "foreign.restore.same-id")
+  local legacyPendingRepair = Career.copy(lastSavedCareer())
+  legacyPendingRepair.schema = 2
+  legacyPendingRepair.pendingRepair.objectId = oldObjectId
+  legacyPendingRepair.vehicles[2].objectId = oldObjectId
+  files[Storage.SAVE_PATH] = legacyPendingRepair
+  local repairReloadGeneration = GameCore.state.runtimeGeneration
+  package.loaded["perekup/world"] = nil
+  World = require("perekup/world")
+  GameCore = newCore()
+  truthy(GameCore.state.runtimeGeneration > repairReloadGeneration)
+  truthy(lastSavedCareer().pendingRepair, "a reset with no post-file must remain pending after restart")
+  equal(lastSavedCareer().pendingRepair.objectId, nil)
+  equal(lastSavedCareer().vehicles[2].objectId, nil)
+  equal(lastEvent.career.money, beforeRepair, "an unresolved reset must not debit on restart")
+  equal(foreignAfterRepairRestart.deleteCount, 0, "a reused ID must never delete the foreign repair-collision car")
+  equal(#foreignAfterRepairRestart.queuedCommands, 0, "a reused ID must never receive a repair command")
+  equal(worldObjects[oldObjectId], foreignAfterRepairRestart)
+  equal(GameCore.onRepairResult(repairPending.token, oldObjectId, true, "saved", repairBindingProof), false,
+    "an old session callback must not be accepted for a reused ID")
+  equal(GameCore.onVehicleStateRestored(staleRestoreToken, staleRestoreObjectId, false, staleRestoreProof), false,
+    "a stale restore failure must not delete an object that reused the old ID")
+  equal(foreignAfterRepairRestart.deleteCount, 0)
+  equal(#foreignAfterRepairRestart.queuedCommands, 0)
+  equal(foreignAfterRestoreRestart.deleteCount, 0)
+  equal(#foreignAfterRestoreRestart.queuedCommands, 0)
+  equal(worldObjects[staleRestoreObjectId], foreignAfterRestoreRestart)
+
+  -- Reuse that numeric ID again for a new PEREKUP spawn, then deliver the old
+  -- object's destruction hook. It must not discard the new live binding.
+  worldObjects[staleRestoreObjectId] = nil
+  nextObjectId = staleRestoreObjectId
+  local reboundProbe, reboundProbeId = World.spawn(
+    "stale_restore_probe", { modelKey = "car_b", configKey = "foreign.probe" },
+    repairPending.configSnapshot)
+  truthy(reboundProbe)
+  equal(reboundProbeId, staleRestoreObjectId)
+  World.onVehicleDestroyed(staleRestoreObjectId)
+  equal(World.getObjectId("stale_restore_probe"), staleRestoreObjectId,
+    "a stale destroy callback must not discard the new object that reused the ID")
+  truthy(World.returnToGarage("stale_restore_probe", World.getBindingToken("stale_restore_probe")))
+
   local verifiedCheckpoint = Career.copy(files[repairPending.preStateFile])
   files[repairPending.preStateFile] = nil
   local beforeBlockedRetrieve = spawnCount
@@ -616,13 +725,17 @@ test("BeamNG adapter persists physical state and recovers repair/store after los
   truthy(GameCore.retrieveVehicle(boughtId))
   local newObjectId = lastEvent.career.vehicles[2].worldObjectId
   truthy(newObjectId ~= oldObjectId)
+  truthy(World.getBindingToken(boughtId) ~= repairBindingProof,
+    "a restarted GE session must issue a new binding proof even if BeamNG reuses the numeric ID")
   equal(worldObjects[newObjectId].config.parts.engine, repairPending.configSnapshot.parts.engine,
     "retrieval must rebuild the saved part configuration before loading physical state")
   local restoreCommand = worldObjects[newObjectId].queuedCommands[1]
-  local restoreToken = restoreCommand and restoreCommand:match('restoreState%([^,]+,%s*"([A-Za-z0-9_%-]+)"%)')
+  local restoreToken = restoreCommand and restoreCommand:match('restoreState%([^,]+,%s*"([A-Za-z0-9_%-]+)"')
+  local newBindingProof = World.getBindingToken(boughtId)
   truthy(restoreToken, "retrieval must queue the verified physical checkpoint restore")
-  truthy(GameCore.onVehicleStateRestored(restoreToken, newObjectId, true))
-  equal(lastSavedCareer().pendingRepair.objectId, newObjectId)
+  truthy(newBindingProof)
+  truthy(GameCore.onVehicleStateRestored(restoreToken, newObjectId, true, newBindingProof))
+  equal(lastSavedCareer().pendingRepair.objectId, nil, "the rebound object ID stays runtime-only")
   truthy(worldObjects[newObjectId].queuedCommands[2]:find("requestRepair", 1, true))
   local pendingAfterRebind = Career.copy(lastSavedCareer().pendingRepair)
   seedStateFile(pendingAfterRebind.postStateFile, pendingAfterRebind.configSnapshot, 101)
@@ -632,13 +745,26 @@ test("BeamNG adapter persists physical state and recovers repair/store after los
   equal(lastEvent.career.money, beforeRepair - repairQuote)
   equal(lastEvent.career.vehicles[2].condition, 100)
   equal(lastEvent.career.vehicles[2].repairUsed, true)
-  equal(GameCore.onRepairResult(repairPending.token, newObjectId, true, "saved"), false)
+  equal(GameCore.onRepairResult(repairPending.token, newObjectId, true, "saved", newBindingProof), false)
   equal(lastEvent.career.money, beforeRepair - repairQuote, "duplicate repair callbacks must not debit twice")
+
+  equal(lastEvent.career.vehicles[2].inWorld, false,
+    "a GE extension reload must drop runtime ownership without touching the live object")
+  truthy(worldObjects[newObjectId], "the unbound world object is left for manual cleanup")
+  destroyObject(GameCore, newObjectId)
+  truthy(GameCore.retrieveVehicle(boughtId))
+  newObjectId = lastEvent.career.vehicles[2].worldObjectId
+  restoreCommand = worldObjects[newObjectId].queuedCommands[1]
+  restoreToken = restoreCommand and restoreCommand:match('restoreState%([^,]+,%s*"([A-Za-z0-9_%-]+)"')
+  newBindingProof = World.getBindingToken(boughtId)
+  truthy(restoreToken)
+  truthy(GameCore.onVehicleStateRestored(restoreToken, newObjectId, true, newBindingProof))
 
   local storedBeforeFailure = lastSavedCareer().vehicles[2].beamStateFile
   truthy(GameCore.returnVehicle(boughtId))
   local missingStore = Career.copy(lastSavedCareer().pendingStore)
-  destroyObject(GameCore, missingStore.objectId)
+  local missingStoreObjectId = World.getObjectId(boughtId)
+  destroyObject(GameCore, missingStoreObjectId)
   equal(lastSavedCareer().pendingStore, nil, "a missing object without a verified new file cancels only the store operation")
   equal(lastSavedCareer().vehicles[2].beamStateFile, storedBeforeFailure, "the previous physical save must remain available")
   equal(lastEvent.career.money, beforeRepair - repairQuote)
@@ -652,13 +778,16 @@ test("BeamNG adapter persists physical state and recovers repair/store after los
   truthy(GameCore.retrieveVehicle(boughtId))
   newObjectId = lastEvent.career.vehicles[2].worldObjectId
   restoreCommand = worldObjects[newObjectId].queuedCommands[1]
-  restoreToken = restoreCommand and restoreCommand:match('restoreState%([^,]+,%s*"([A-Za-z0-9_%-]+)"%)')
+  restoreToken = restoreCommand and restoreCommand:match('restoreState%([^,]+,%s*"([A-Za-z0-9_%-]+)"')
+  newBindingProof = World.getBindingToken(boughtId)
   truthy(restoreToken)
-  truthy(GameCore.onVehicleStateRestored(restoreToken, newObjectId, true))
+  truthy(GameCore.onVehicleStateRestored(restoreToken, newObjectId, true, newBindingProof))
   truthy(GameCore.returnVehicle(boughtId))
   local finalStore = Career.copy(lastSavedCareer().pendingStore)
+  local finalStoreProof = World.getBindingToken(boughtId)
+  equal(finalStore.objectId, nil)
   seedStateFile(finalStore.stateFile, finalStore.configSnapshot, 111)
-  truthy(GameCore.onVehicleStateSaved(finalStore.token, newObjectId, "store", true))
+  truthy(GameCore.onVehicleStateSaved(finalStore.token, newObjectId, "store", true, finalStoreProof))
   equal(lastEvent.career.vehicles[2].inWorld, false)
   equal(lastSavedCareer().vehicles[2].beamStateFile, finalStore.stateFile)
 
