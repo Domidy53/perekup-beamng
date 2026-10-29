@@ -6,10 +6,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import struct
-import zlib
 from pathlib import Path
-from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
+from zipfile import ZIP_STORED, ZipFile, ZipInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT / "ui" / "modules" / "apps" / "perekup"
@@ -35,59 +33,6 @@ EXPECTED_FILES = (
     "ui/modules/apps/perekup/app.png",
     "LICENSE",
 )
-
-
-def _png_chunk(kind: bytes, payload: bytes) -> bytes:
-    checksum = zlib.crc32(kind + payload) & 0xFFFFFFFF
-    return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
-
-
-def make_app_icon(path: Path) -> None:
-    """Write a small original UI tile; no external artwork or imaging library."""
-    width, height = 250, 120
-    background = (18, 24, 32)
-    pixels = [[background for _ in range(width)] for _ in range(height)]
-
-    def rect(left: int, top: int, right: int, bottom: int, color: tuple[int, int, int]) -> None:
-        for y in range(max(0, top), min(height, bottom)):
-            for x in range(max(0, left), min(width, right)):
-                pixels[y][x] = color
-
-    def circle(cx: int, cy: int, radius: int, color: tuple[int, int, int]) -> None:
-        for y in range(max(0, cy - radius), min(height, cy + radius + 1)):
-            for x in range(max(0, cx - radius), min(width, cx + radius + 1)):
-                if (x - cx) ** 2 + (y - cy) ** 2 <= radius**2:
-                    pixels[y][x] = color
-
-    amber = (239, 180, 93)
-    body = (226, 233, 240)
-    glass = (72, 94, 113)
-    tire = (9, 12, 16)
-    rect(0, 0, width, 7, amber)
-    rect(45, 69, 202, 87, body)
-    rect(61, 62, 91, 70, body)
-    rect(78, 51, 159, 70, body)
-    rect(84, 55, 116, 67, glass)
-    rect(120, 55, 153, 67, glass)
-    rect(193, 73, 216, 81, body)
-    circle(80, 87, 12, tire)
-    circle(174, 87, 12, tire)
-    circle(80, 87, 5, amber)
-    circle(174, 87, 5, amber)
-    rect(49, 91, 207, 94, amber)
-
-    raw = bytearray()
-    for row in pixels:
-        raw.append(0)
-        for red, green, blue in row:
-            raw.extend((red, green, blue))
-    png = (
-        b"\x89PNG\r\n\x1a\n"
-        + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
-        + _png_chunk(b"IDAT", zlib.compress(bytes(raw), level=9))
-        + _png_chunk(b"IEND", b"")
-    )
-    path.write_bytes(png)
 
 
 def collect_package_files() -> list[Path]:
@@ -132,7 +77,6 @@ def validate_sources(files: list[Path]) -> None:
 
 
 def build(output: Path) -> tuple[str, int]:
-    make_app_icon(APP_DIR / "app.png")
     files = collect_package_files()
     validate_sources(files)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -140,11 +84,13 @@ def build(output: Path) -> tuple[str, int]:
     if temp.exists():
         temp.unlink()
 
-    with ZipFile(temp, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
+    # ZIP_STORED avoids zlib-version differences that change the package hash
+    # between Windows and Linux. The install payload is small enough for this.
+    with ZipFile(temp, "w", compression=ZIP_STORED) as archive:
         for path in files:
             name = path.relative_to(ROOT).as_posix()
             info = ZipInfo(name, date_time=(2024, 1, 1, 0, 0, 0))
-            info.compress_type = ZIP_DEFLATED
+            info.compress_type = ZIP_STORED
             info.external_attr = 0o100644 << 16
             archive.writestr(info, package_bytes(path))
 

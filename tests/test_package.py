@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 from pathlib import Path
-from zipfile import ZipFile
+from zipfile import ZIP_STORED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 ARCHIVE = ROOT / "dist" / "perekup-v0.0.1.zip"
@@ -17,6 +17,12 @@ class PackageTests(unittest.TestCase):
             names = archive.namelist()
             self.assertEqual({name.split("/", 1)[0] for name in names}, {"lua", "scripts", "ui", "LICENSE"})
             self.assertTrue(all(not name.startswith(("vehicles/", "levels/", "art/")) for name in names))
+            self.assertTrue(all(item.compress_type == ZIP_STORED for item in archive.infolist()))
+
+    def test_package_uses_the_committed_icon_without_regenerating_it(self) -> None:
+        source_icon = ROOT / "ui" / "modules" / "apps" / "perekup" / "app.png"
+        with ZipFile(ARCHIVE) as archive:
+            self.assertEqual(archive.read("ui/modules/apps/perekup/app.png"), source_icon.read_bytes())
 
     def test_text_payloads_use_canonical_lf_line_endings(self) -> None:
         with ZipFile(ARCHIVE) as archive:

@@ -28,6 +28,15 @@ def main() -> None:
         raise SystemExit("Lupa's Lua 5.1 runtime is unavailable. Reinstall requirements-test.txt.") from error
 
     lua = LuaRuntime(unpack_returned_tuples=True)
+    compile_lua = lua.eval("function(source, name) local chunk, err = loadstring(source, name); return chunk ~= nil, err end")
+    lua_files = sorted((ROOT / "lua").rglob("*.lua"))
+    for path in lua_files:
+        relative = path.relative_to(ROOT).as_posix()
+        compiled, error = compile_lua(path.read_text(encoding="utf-8"), "@" + relative)
+        if not compiled:
+            raise SystemExit(f"Lua syntax error in {relative}: {error}")
+    print(f"PASS Lua syntax ({len(lua_files)} files)")
+
     lua.execute((ROOT / "tests" / "lua" / "run.lua").read_text(encoding="utf-8"))
 
     run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"])
