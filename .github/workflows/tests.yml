@@ -1,0 +1,65 @@
+name: Automated tests
+
+on:
+  push:
+    branches:
+      - codex/vertical-slice-v0-0-1
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Lua, package, and UI checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Install test runtime
+        run: python -m pip install -r requirements-test.txt
+
+      - name: Run automated checks and build ZIP
+        run: python tools/run_tests.py
+
+      - name: Verify install ZIP and calculate SHA-256
+        id: package
+        shell: bash
+        run: |
+          python tools/verify_package.py dist/perekup-v0.0.1.zip
+          digest="$(sha256sum dist/perekup-v0.0.1.zip | cut -d ' ' -f 1)"
+          echo "sha256=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Upload directly installable ZIP
+        id: artifact
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/perekup-v0.0.1.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish download and checksum in run summary
+        shell: bash
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+          ZIP_SHA256: ${{ steps.package.outputs.sha256 }}
+        run: |
+          echo "## PEREKUP v0.0.1 test package" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Download install ZIP]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "SHA-256: \`$ZIP_SHA256\`" >> "$GITHUB_STEP_SUMMARY"
