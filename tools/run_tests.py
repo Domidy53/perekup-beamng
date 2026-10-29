@@ -18,6 +18,7 @@ def run(command: list[str]) -> None:
 
 def main() -> None:
     run([sys.executable, "tools/build_mod.py"])
+    run([sys.executable, "tools/verify_package.py"])
 
     if importlib.util.find_spec("lupa") is None:
         raise SystemExit("Lua test runtime missing. Run: python -m pip install -r requirements-test.txt")

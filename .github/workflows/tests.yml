@@ -36,3 +36,30 @@ jobs:
 
       - name: Run automated checks and build ZIP
         run: python tools/run_tests.py
+
+      - name: Verify install ZIP and calculate SHA-256
+        id: package
+        shell: bash
+        run: |
+          python tools/verify_package.py dist/perekup-v0.0.1.zip
+          digest="$(sha256sum dist/perekup-v0.0.1.zip | cut -d ' ' -f 1)"
+          echo "sha256=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Upload directly installable ZIP
+        id: artifact
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/perekup-v0.0.1.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish download and checksum in run summary
+        shell: bash
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+          ZIP_SHA256: ${{ steps.package.outputs.sha256 }}
+        run: |
+          echo "## PEREKUP v0.0.1 test package" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Download install ZIP]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "SHA-256: \`$ZIP_SHA256\`" >> "$GITHUB_STEP_SUMMARY"

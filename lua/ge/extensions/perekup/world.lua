@@ -1,7 +1,8 @@
 local M = {}
+local Diagnostics = require("perekup/diagnostics")
 
--- These bindings are deliberately memory-only. A BeamNG object ID is valid only
--- while this module still holds the object returned by PEREKUP's own spawn call.
+-- These bindings are memory-only. The career ID is permanent; the object ID,
+-- unique scene-tree name, and callback proof exist only for this runtime session.
 local bindings = {}
 local restoring = {}
 local runtimeCounter = 0
@@ -26,27 +27,6 @@ local function readMember(object, name)
   return ok and value or nil
 end
 
-local function getObjectById(id)
-  local getter = rawget(_G, "getObjectByID")
-  if type(getter) == "function" then
-    local ok, object = pcall(getter, id)
-    if ok and object then return object end
-  end
-  local backend = rawget(_G, "be")
-  local backendGetter = readMember(backend, "getObjectByID")
-  if type(backendGetter) == "function" then
-    local ok, object = pcall(backendGetter, backend, id)
-    if ok and object then return object end
-  end
-  local tree = rawget(_G, "scenetree")
-  local sceneGetter = readMember(tree, "findObjectById")
-  if type(sceneGetter) == "function" then
-    local ok, object = pcall(sceneGetter, id)
-    if ok and object then return object end
-  end
-  return nil
-end
-
 local function objectId(object)
   local getter = readMember(object, "getID") or readMember(object, "getId")
   if type(getter) ~= "function" then return nil end
@@ -54,6 +34,35 @@ local function objectId(object)
   value = ok and tonumber(value) or nil
   if not value or value ~= math.floor(value) or value < 0 then return nil end
   return value
+end
+
+local function objectName(object, expectedId)
+  local getter = readMember(object, "getName")
+  if type(getter) ~= "function" then return nil end
+  local ok, value = pcall(getter, object)
+  if ok and type(value) == "string" and #value > 0 then return value end
+  ok, value = pcall(getter, object, expectedId)
+  return ok and type(value) == "string" and #value > 0 and value or nil
+end
+
+local function findNamedObject(name)
+  local tree = rawget(_G, "scenetree")
+  local finder = readMember(tree, "findObject")
+  if type(finder) ~= "function" then return nil, false end
+  local ok, object = pcall(finder, name)
+  if not ok then return nil, false end
+  return object, true
+end
+
+local function verifiedNamedObject(id, name)
+  local object, lookupAvailable = findNamedObject(name)
+  if not lookupAvailable then return nil, false, false end
+  if not object then return nil, true, true end
+  local currentId = objectId(object)
+  local currentName = objectName(object, id)
+  if currentId == nil or currentName == nil then return nil, true, false end
+  if currentId ~= id or currentName ~= name then return nil, true, true end
+  return object, true, false
 end
 
 local function nextRuntimeToken(prefix)
@@ -64,14 +73,31 @@ end
 local function boundObject(careerVehicleId)
   local binding = bindings[careerVehicleId]
   if type(binding) ~= "table" then return nil end
-  local current = getObjectById(binding.objectId)
-  if not current or not rawequal(current, binding.objectRef)
-    or objectId(binding.objectRef) ~= binding.objectId then
+  local current, lookupAvailable, identityMismatch = verifiedNamedObject(binding.objectId, binding.objectName)
+  if current then return binding, current end
+  if lookupAvailable and identityMismatch then
     bindings[careerVehicleId] = nil
     restoring[careerVehicleId] = nil
-    return nil
   end
-  return binding, binding.objectRef
+  return nil
+end
+
+local function assignUniqueObjectName(object, id)
+  local setter = readMember(object, "setName")
+  if type(setter) ~= "function" then return nil end
+  for _ = 1, 32 do
+    local name = "PEREKUP_" .. nextRuntimeToken("O")
+    local occupied, lookupAvailable = findNamedObject(name)
+    if not lookupAvailable then return nil end
+    if not occupied then
+      local ok, result = pcall(setter, object, name)
+      if ok and result ~= false then
+        local current = verifiedNamedObject(id, name)
+        if current then return name end
+      end
+    end
+  end
+  return nil
 end
 
 local function safeId(value)
@@ -159,11 +185,13 @@ function M.captureVehicleConfig(careerVehicleId, expectedModel)
   end
   local getter = readMember(manager, "getVehicleData")
   if type(getter) ~= "function" then
+    Diagnostics.record("vehicle.config.read", "unavailable")
     return nil, "В этой версии игры недоступно чтение текущей конфигурации автомобиля."
   end
   local ok, data = pcall(getter, id)
   local config = ok and type(data) == "table" and data.config or nil
   if type(config) ~= "table" or type(config.parts) ~= "table" then
+    Diagnostics.record("vehicle.config.read", ok and "unverified" or "failed")
     return nil, "Игровой каталог ещё не предоставил полный список установленных деталей."
   end
   if (config.vars ~= nil and type(config.vars) ~= "table")
@@ -172,6 +200,7 @@ function M.captureVehicleConfig(careerVehicleId, expectedModel)
   end
   local model = config.model or expectedModel
   if model ~= expectedModel then
+    Diagnostics.record("vehicle.config.read", "unverified")
     return nil, "Конфигурация игрового объекта не совпадает с машиной карьеры."
   end
 
@@ -185,8 +214,10 @@ function M.captureVehicleConfig(careerVehicleId, expectedModel)
   if config.licenseName ~= nil then snapshot.licenseName = config.licenseName end
   local copied, copyOk = copyJson(snapshot, 1, {}, { count = 0 })
   if not copyOk or not validConfigSnapshot(copied, expectedModel) then
+    Diagnostics.record("vehicle.config.read", "failed")
     return nil, "Текущая конфигурация содержит неподдерживаемые данные и не сохранена."
   end
+  Diagnostics.record("vehicle.config.read", "ok")
   return copied
 end
 
@@ -210,6 +241,7 @@ function M.makeStatePath(vehicleId, token, suffix)
     return nil, "Некорректный путь физического сохранения."
   end
   if not ensureStateDirectory() then
+    Diagnostics.record("vehicle.state.path", "unavailable")
     return nil, "Не удалось подготовить папку физических сохранений в пользовательской папке BeamNG."
   end
   local fs = rawget(_G, "FS")
@@ -219,6 +251,7 @@ function M.makeStatePath(vehicleId, token, suffix)
     local ok, exists = pcall(function() return fs:fileExists(path) end)
     if ok and exists == false then return path end
   end
+  Diagnostics.record("vehicle.state.path", "failed")
   return nil, "Не удалось подобрать новое имя файла физического состояния."
 end
 
@@ -286,7 +319,10 @@ local function queueBoundCommand(careerVehicleId, command, operationToken, opera
   local binding, object = boundObject(careerVehicleId)
   if not binding then return false, nil, "У этой карьерной машины нет подтверждённого объекта текущей сессии." end
   local queue = readMember(object, "queueLuaCommand")
-  if type(queue) ~= "function" then return false, nil, "Lua VM автомобиля недоступен." end
+  if type(queue) ~= "function" then
+    Diagnostics.record("vehicle.command.queue", "unavailable")
+    return false, nil, "Lua VM автомобиля недоступен."
+  end
   local previousOperation = binding.operation
   binding.operation = { token = operationToken, kind = operationKind }
   local ok, result = pcall(queue, object, command)
@@ -294,8 +330,10 @@ local function queueBoundCommand(careerVehicleId, command, operationToken, opera
     if binding.operation.token == operationToken and binding.operation.kind == operationKind then
       binding.operation = previousOperation
     end
+    Diagnostics.record("vehicle.command.queue", "failed")
     return false, nil, "Команда не была принята Lua VM автомобиля."
   end
+  Diagnostics.record("vehicle.command.queue", "ok")
   return true, binding.proof
 end
 
@@ -334,10 +372,11 @@ function M.finishStateRestore(token, objectIdValue, proof, succeeded)
       local binding = bindings[careerVehicleId]
       binding.operation = nil
       if succeeded == true then return true, careerVehicleId end
-      M.returnToGarage(careerVehicleId, proof)
-      return false, careerVehicleId
+      local removed = M.returnToGarage(careerVehicleId, proof)
+      return false, careerVehicleId, removed == true
     end
   end
+  Diagnostics.record("vehicle.restore.callback", "unverified")
   return false
 end
 
@@ -359,6 +398,7 @@ function M.spawn(careerVehicleId, config, configSnapshot, stateFile)
     return false, "Не удалось проверить сохранённое физическое состояние; автомобиль оставлен в гараже."
   end
   if type(core_vehicles) ~= "table" or type(core_vehicles.spawnNewVehicle) ~= "function" then
+    Diagnostics.record("vehicle.spawn", "unavailable")
     return false, "В этой версии игры недоступен API появления автомобиля."
   end
 
@@ -369,17 +409,27 @@ function M.spawn(careerVehicleId, config, configSnapshot, stateFile)
   }
   local ok, object = pcall(core_vehicles.spawnNewVehicle, config.modelKey, options)
   if not ok or object == nil or object == false then
+    Diagnostics.record("vehicle.spawn", "failed")
     return false, "BeamNG не подтвердил появление выбранного автомобиля."
   end
   local id = objectId(object)
   if not id then
+    Diagnostics.record("vehicle.spawn", "unverified")
     return false, "Автомобиль появился без подтверждённого игрового идентификатора."
   end
   local proof = nextRuntimeToken("B")
-  bindings[careerVehicleId] = { objectId = id, objectRef = object, proof = proof }
+  local name = assignUniqueObjectName(object, id)
+  if not name then
+    Diagnostics.record("vehicle.identity", "unavailable")
+    return false, "Автомобиль появился, но безопасный поиск объекта по уникальному имени недоступен. PEREKUP не будет управлять им; при необходимости удалите его вручную."
+  end
+  bindings[careerVehicleId] = { objectId = id, objectName = name, proof = proof }
   if not boundObject(careerVehicleId) then
+    bindings[careerVehicleId] = nil
+    Diagnostics.record("vehicle.identity", "failed")
     return false, "Игровой объект появился, но его текущую идентичность нельзя подтвердить. PEREKUP не будет управлять им; при необходимости удалите его вручную."
   end
+  Diagnostics.record("vehicle.spawn", "ok")
   if stateFile then
     local queued, tokenOrError = queueStateRestore(careerVehicleId, stateFile, config.modelKey, configSnapshot)
     if not queued then
@@ -395,15 +445,25 @@ local function leaveVehicleIfActive(id)
   local backend = rawget(_G, "be")
   local playerGetter = readMember(backend, "getPlayerVehicleID")
   if type(playerGetter) ~= "function" then
+    Diagnostics.record("vehicle.exit", "unavailable")
     return false, "BeamNG не предоставил проверку активного автомобиля; безопасное сохранение остановлено."
   end
   local ok, playerId = pcall(playerGetter, backend, 0)
-  if not ok then return false, "Не удалось проверить, находится ли игрок в сохраняемом автомобиле." end
+  if not ok then
+    Diagnostics.record("vehicle.exit", "failed")
+    return false, "Не удалось проверить, находится ли игрок в сохраняемом автомобиле."
+  end
   if tonumber(playerId) ~= id then return true end
   local walking = readMember(rawget(_G, "gameplay_walk"), "setWalkingMode")
-  if type(walking) ~= "function" then return false, "Сначала выйдите из машины, чтобы зафиксировать её состояние." end
+  if type(walking) ~= "function" then
+    Diagnostics.record("vehicle.exit", "unavailable")
+    return false, "Сначала выйдите из машины, чтобы зафиксировать её состояние."
+  end
   local walkOk, result = pcall(walking, true, nil, nil, true)
-  if not walkOk or result == false then return false, "Не удалось безопасно выйти из автомобиля перед сохранением." end
+  if not walkOk or result == false then
+    Diagnostics.record("vehicle.exit", "failed")
+    return false, "Не удалось безопасно выйти из автомобиля перед сохранением."
+  end
   return true
 end
 
@@ -422,23 +482,30 @@ function M.returnToGarage(careerVehicleId, expectedProof)
     return false, "Связь с объектом изменилась; объект оставлен без изменений."
   end
   local delete = readMember(object, "delete")
-  if type(delete) ~= "function" then return false, "BeamNG не предоставил операцию удаления игрового объекта." end
+  if type(delete) ~= "function" then
+    Diagnostics.record("vehicle.store.delete", "unavailable")
+    return false, "BeamNG не предоставил операцию удаления игрового объекта."
+  end
   local safe, reason = leaveVehicleIfActive(binding.objectId)
   if not safe then return false, reason end
-  local current = getObjectById(binding.objectId)
-  if not current or not rawequal(current, binding.objectRef) then
+  local currentBinding, current = boundObject(careerVehicleId)
+  if not currentBinding or currentBinding.proof ~= binding.proof
+    or currentBinding.objectId ~= binding.objectId or currentBinding.objectName ~= binding.objectName then
     bindings[careerVehicleId] = nil
     restoring[careerVehicleId] = nil
+    Diagnostics.record("vehicle.store.delete", "unverified")
     return false, "Игровой объект изменился после проверки; удаление остановлено."
   end
   binding.deleting = true
-  local ok, result = pcall(delete, object)
+  local ok, result = pcall(delete, current)
   if not ok or result == false then
     binding.deleting = false
+    Diagnostics.record("vehicle.store.delete", "failed")
     return false, "BeamNG не подтвердил возврат автомобиля в гараж."
   end
   bindings[careerVehicleId] = nil
   restoring[careerVehicleId] = nil
+  Diagnostics.record("vehicle.store.delete", "ok")
   return true
 end
 
@@ -499,11 +566,10 @@ function M.onVehicleDestroyed(id)
   local affected = {}
   for careerVehicleId, binding in pairs(bindings) do
     if binding.objectId == id then
-      local current = getObjectById(id)
-      -- A destruction hook carries only a numeric ID. If that ID has already
-      -- been reused, do not discard a live binding to the new object. A hook
-      -- fired before removal is handled by the next boundObject check.
-      if not binding.deleting and not (current and rawequal(current, binding.objectRef)) then
+      local current, lookupAvailable, identityMismatch = verifiedNamedObject(id, binding.objectName)
+      -- A destruction hook carries only a numeric ID. Keep the binding if the
+      -- runtime-only name and ID still resolve, regardless of Lua wrapper identity.
+      if not binding.deleting and lookupAvailable and identityMismatch then
         affected[#affected + 1] = {
           careerVehicleId = careerVehicleId,
           proof = binding.proof,
@@ -511,6 +577,7 @@ function M.onVehicleDestroyed(id)
         }
         bindings[careerVehicleId] = nil
         restoring[careerVehicleId] = nil
+        Diagnostics.record("vehicle.object", "missing")
       end
     end
   end

@@ -20,7 +20,10 @@ var perekupText = {
     unavailableConfig: 'Конфигурация недоступна в текущей установке. Запись о машине сохранена.',
     repairExpenses: 'Расходы на ремонт', salePrice: 'Цена продажи', physicalReset: 'Физический сброс', listForSale: 'Выставить', sellFor: 'Продать за',
     emptyGarage: 'Гараж пуст', deals: 'СДЕЛКИ И РЕШЕНИЯ', dayPrefix: 'День',
-    emptyHistory: 'История пока пуста', language: 'Язык', offline: 'Работает локально · Без сетевых запросов · Цены примерные'
+    emptyHistory: 'История пока пуста', language: 'Язык', diagnostics: 'Сохранить диагностику',
+    diagnosticsSaved: 'Диагностика сохранена: settings/perekup_diagnostics.json',
+    diagnosticsFailed: 'Диагностику сохранить не удалось. Проверьте beamng.log.',
+    offline: 'Работает локально · Без сетевых запросов · Цены примерные'
   },
   en: {
     eyebrow: 'CAREER · FREE ROAM', refresh: 'Refresh', savedCareer: 'SAVED CAREER · DAY {day}',
@@ -43,7 +46,10 @@ var perekupText = {
     unavailableConfig: 'Configuration is unavailable in this installation. The ownership record is saved.',
     repairExpenses: 'Repair expenses', salePrice: 'Sale price', physicalReset: 'Physics reset', listForSale: 'List for sale', sellFor: 'Sell for',
     emptyGarage: 'The garage is empty', deals: 'DEALS AND DECISIONS', dayPrefix: 'Day',
-    emptyHistory: 'No history yet', language: 'Language', offline: 'Runs locally · No network requests · Prices are estimates'
+    emptyHistory: 'No history yet', language: 'Language', diagnostics: 'Export diagnostics',
+    diagnosticsSaved: 'Diagnostics saved: settings/perekup_diagnostics.json',
+    diagnosticsFailed: 'Could not save diagnostics. Check beamng.log.',
+    offline: 'Runs locally · No network requests · Prices are estimates'
   }
 };
 
@@ -62,6 +68,7 @@ angular.module('beamng.apps').directive('perekupApp', function () {
           </div>
           <div class="perekup-header-tools">
             <select class="perekup-language-select" ng-model="language" ng-options="item.id as item.name for item in languages" ng-attr-aria-label="{{tr('language')}}"></select>
+            <button class="perekup-icon-button" ng-click="exportDiagnostics()" ng-attr-title="{{tr('diagnostics')}}" ng-attr-aria-label="{{tr('diagnostics')}}">↓</button>
             <button class="perekup-icon-button" ng-click="refresh()" ng-attr-title="{{tr('refresh')}}" ng-attr-aria-label="{{tr('refresh')}}">↻</button>
           </div>
         </header>
@@ -80,6 +87,7 @@ angular.module('beamng.apps').directive('perekupApp', function () {
         </div>
 
         <div class="perekup-message" ng-if="snapshot.message" ng-bind="snapshot.message"></div>
+        <div class="perekup-message" ng-if="diagnosticsNotice" ng-bind="diagnosticsNotice"></div>
         <div class="perekup-warning" ng-if="snapshot.warning" ng-bind="snapshot.warning"></div>
         <div class="perekup-warning" ng-if="snapshot.catalogError" ng-bind="snapshot.catalogError"></div>
 
@@ -189,6 +197,7 @@ angular.module('beamng.apps').directive('perekupApp', function () {
     `,
     link: function (scope, element, attrs, appCtrl) {
       var snapshotListener;
+      var diagnosticsListener;
       scope.tab = 'overview';
       scope.careerOpen = false;
       scope.language = 'ru';
@@ -247,6 +256,14 @@ angular.module('beamng.apps').directive('perekupApp', function () {
           bngApi.engineLua('extensions.perekup_core.requestSnapshot()');
         }
       };
+      scope.exportDiagnostics = function () {
+        scope.diagnosticsNotice = null;
+        if (window.bngApi && typeof bngApi.engineLua === 'function') {
+          bngApi.engineLua('extensions.perekup_core.exportDiagnostics()');
+        } else {
+          scope.diagnosticsNotice = scope.tr('diagnosticsFailed');
+        }
+      };
       scope.startCareer = function (key) {
         callEngine('startCareer', key);
         scope.careerOpen = true;
@@ -290,8 +307,16 @@ angular.module('beamng.apps').directive('perekupApp', function () {
           }
         });
       });
+      diagnosticsListener = scope.$on('PerekupDiagnosticsExported', function (event, data) {
+        scope.$evalAsync(function () {
+          scope.diagnosticsNotice = data && data.success === true
+            ? scope.tr('diagnosticsSaved')
+            : scope.tr('diagnosticsFailed');
+        });
+      });
       scope.$on('$destroy', function () {
         if (snapshotListener) snapshotListener();
+        if (diagnosticsListener) diagnosticsListener();
       });
       scope.refresh();
     }

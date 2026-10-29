@@ -6,6 +6,7 @@ local Storage = require("perekup/persistence")
 local Vehicles = require("perekup/vehicles")
 local Listings = require("perekup/listings")
 local World = require("perekup/world")
+local Diagnostics = require("perekup/diagnostics")
 
 local testsRun = 0
 
@@ -22,6 +23,16 @@ local function test(name, callback)
   testsRun = testsRun + 1
   print("PASS " .. name)
 end
+
+test("diagnostics accept only small event codes and export bounded snapshots", function()
+  truthy(Diagnostics.record("test.safe_event", "ok"))
+  equal(Diagnostics.record("C:/Users/player/save.json", "ok"), false,
+    "free-form paths must never enter the diagnostic event list")
+  local report = Diagnostics.snapshot({ career = { status = "active" } })
+  equal(report.schema, 1)
+  equal(report.career.career.status, "active")
+  truthy(#report.events <= 100)
+end)
 
 local rawModels = {
   { key = "car_b", Brand = "Brand B", Name = "Road", Type = "Car" },
@@ -456,9 +467,19 @@ test("BeamNG adapter rejects reused foreign IDs and recovers saves and repairs a
     return core
   end
 
-  getObjectByID = function(objectId) return worldObjects[tonumber(objectId)] end
+  local function lookupWrapper(object)
+    if not object then return nil end
+    return {
+      getID = function() return object.getID() end,
+      getName = function() return object.name end,
+      setName = function(_, name) return object.setName(object, name) end,
+      queueLuaCommand = function(_, command) return object.queueLuaCommand(object, command) end,
+      delete = function() return object.delete(object) end
+    }
+  end
+  getObjectByID = function(objectId) return lookupWrapper(worldObjects[tonumber(objectId)]) end
   be = {
-    getObjectByID = function(_, objectId) return worldObjects[tonumber(objectId)] end,
+    getObjectByID = function(_, objectId) return lookupWrapper(worldObjects[tonumber(objectId)]) end,
     getPlayerVehicleID = function(_, playerId)
       equal(playerId, 0)
       return activeObjectId
@@ -471,6 +492,14 @@ test("BeamNG adapter rejects reused foreign IDs and recovers saves and repairs a
       return true
     end
   }
+  scenetree = {
+    findObject = function(name)
+      for _, object in pairs(worldObjects) do
+        if object.name == name then return lookupWrapper(object) end
+      end
+      return nil
+    end
+  }
   local function spawnMockVehicle(modelKey, options)
     truthy(type(modelKey) == "string")
     equal(options.autoEnterVehicle, true)
@@ -480,6 +509,14 @@ test("BeamNG adapter rejects reused foreign IDs and recovers saves and repairs a
     local key = type(options.config) == "string" and options.config or "default"
     local object = { queuedCommands = {}, deleteCount = 0, config = configSnapshot(modelKey, key, options.config) }
     object.getID = function() return id end
+    object.getName = function() return object.name end
+    object.setName = function(_, name)
+      for otherId, other in pairs(worldObjects) do
+        if otherId ~= id and other.name == name then return false end
+      end
+      object.name = name
+      return true
+    end
     object.queueLuaCommand = function(_, command)
       object.queuedCommands[#object.queuedCommands + 1] = command
       return true
@@ -496,8 +533,10 @@ test("BeamNG adapter rejects reused foreign IDs and recovers saves and repairs a
     return object
   end
   local function placeForeignObject(id, modelKey, configKey)
-    local foreign = { queuedCommands = {}, deleteCount = 0, config = configSnapshot(modelKey, configKey) }
+    local foreign = { queuedCommands = {}, deleteCount = 0, config = configSnapshot(modelKey, configKey), name = "FOREIGN_" .. configKey }
     foreign.getID = function() return id end
+    foreign.getName = function() return foreign.name end
+    foreign.setName = function(_, name) foreign.name = name return true end
     foreign.queueLuaCommand = function(_, command)
       foreign.queuedCommands[#foreign.queuedCommands + 1] = command
       return true
@@ -527,10 +566,16 @@ test("BeamNG adapter rejects reused foreign IDs and recovers saves and repairs a
       return object and { config = Career.copy(object.config) } or nil
     end
   }
+  local diagnosticsExportEvent
   guihooks = {
     trigger = function(eventName, payload)
-      equal(eventName, "PerekupSnapshot")
-      lastEvent = payload
+      if eventName == "PerekupSnapshot" then
+        lastEvent = payload
+      elseif eventName == "PerekupDiagnosticsExported" then
+        diagnosticsExportEvent = payload
+      else
+        error("unexpected UI event " .. tostring(eventName))
+      end
     end
   }
   local function destroyObject(core, id)
@@ -551,6 +596,10 @@ test("BeamNG adapter rejects reused foreign IDs and recovers saves and repairs a
   truthy(refreshCore(GameCore))
   equal(lastEvent.status, "new")
   equal(#lastEvent.starterOptions, 3)
+  truthy(GameCore.exportDiagnostics())
+  equal(diagnosticsExportEvent.success, true)
+  equal(diagnosticsExportEvent.path, "settings/perekup_diagnostics.json")
+  equal(files["settings/perekup_diagnostics.json"].schema, 1)
 
   rejectSpawn = true
   equal(GameCore.startCareer(lastEvent.starterOptions[1].id), false)
@@ -562,8 +611,28 @@ test("BeamNG adapter rejects reused foreign IDs and recovers saves and repairs a
   equal(lastEvent.career.money, 500)
   local starterId = lastEvent.career.starterVehicleId
   local starterObjectId = lastEvent.career.vehicles[1].worldObjectId
+  local starterName = worldObjects[starterObjectId].name
+  local wrapperA = scenetree.findObject(starterName)
+  local wrapperB = scenetree.findObject(starterName)
+  truthy(wrapperA and wrapperB)
+  equal(rawequal(wrapperA, wrapperB), false, "repeated BeamNG lookups may return distinct Lua wrappers")
+  equal(World.getObjectId(starterId), starterObjectId,
+    "a verified own vehicle must stay usable even when name lookup returns a fresh wrapper")
   local starterBindingProof = World.getBindingToken(starterId)
   truthy(starterBindingProof)
+  local collisionSpawned, collisionId = World.spawn("runtime_collision_probe",
+    { modelKey = "car_b", configKey = "foreign.probe" })
+  truthy(collisionSpawned)
+  local collisionForeign = placeForeignObject(collisionId, "car_b", "runtime.reused.id")
+  equal(World.getObjectId("runtime_collision_probe"), nil,
+    "a same-session numeric ID collision must invalidate the old named binding")
+  equal(World.queueRepair("runtime_collision_probe", "R_runtime_collision", "settings/perekup_vehicle_states/probe_post.json"), false)
+  equal(World.returnToGarage("runtime_collision_probe"), true,
+    "returning an already-unbound record must not delete the replacement object")
+  equal(collisionForeign.deleteCount, 0)
+  equal(#collisionForeign.queuedCommands, 0)
+  worldObjects[collisionId] = nil
+  activeObjectId = starterObjectId
   equal(lastEvent.career.vehicles[1].inWorld, true)
   equal(GameCore.sellVehicle(starterId), false)
   equal(lastEvent.career.money, 500)

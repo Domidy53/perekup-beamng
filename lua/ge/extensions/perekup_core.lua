@@ -4,6 +4,7 @@ local Garage = require("perekup/garage")
 local Storage = require("perekup/persistence")
 local Vehicles = require("perekup/vehicles")
 local World = require("perekup/world")
+local Diagnostics = require("perekup/diagnostics")
 
 local M = {}
 -- Only this monotonically increasing generation survives a GE Lua reload.
@@ -22,6 +23,20 @@ local pendingStoreStartedAt
 local lastStoreAck
 local storeAckRetryAt
 local pendingStateRetryAt
+local lastCatalogStatus = "not_checked"
+local lastCatalogModelCount = 0
+local lastCatalogConfigCount = 0
+
+local function updateCatalogStatus(status, modelCount, configCount)
+  modelCount = tonumber(modelCount) or 0
+  configCount = tonumber(configCount) or 0
+  if status ~= lastCatalogStatus or modelCount ~= lastCatalogModelCount or configCount ~= lastCatalogConfigCount then
+    Diagnostics.record("catalog.read", status)
+    lastCatalogStatus = status
+    lastCatalogModelCount = modelCount
+    lastCatalogConfigCount = configCount
+  end
+end
 
 local function startRuntimeGeneration()
   local previousState = type(M.state) == "table" and tonumber(M.state.runtimeGeneration) or 0
@@ -40,6 +55,7 @@ local function loadCareer()
   end
   loadAttempted = true
   state, loadError = store.load()
+  Diagnostics.record("career.load", loadError and "failed" or (state and "ok" or "new"))
   if state and loadError then
     loadWarning = loadError
     loadError = nil
@@ -49,15 +65,19 @@ end
 local function getCatalog()
   if type(core_vehicles) ~= "table" or type(core_vehicles.getModelList) ~= "function"
     or type(core_vehicles.getConfigList) ~= "function" then
+    updateCatalogStatus("unavailable", 0, 0)
     return {}, "Каталог автомобилей BeamNG сейчас недоступен."
   end
   local modelsOk, modelCatalog = pcall(core_vehicles.getModelList, true)
   local configsOk, configCatalog = pcall(core_vehicles.getConfigList, true)
   if not modelsOk or not configsOk or type(modelCatalog) ~= "table" or type(modelCatalog.models) ~= "table"
     or type(configCatalog) ~= "table" or type(configCatalog.configs) ~= "table" then
+    updateCatalogStatus("failed", 0, 0)
     return {}, "Не удалось прочитать каталог автомобилей BeamNG."
   end
-  return Vehicles.discover(modelCatalog.models, configCatalog.configs), nil
+  local discovered = Vehicles.discover(modelCatalog.models, configCatalog.configs)
+  updateCatalogStatus(#discovered > 0 and "available" or "empty", #modelCatalog.models, #configCatalog.configs)
+  return discovered, nil
 end
 
 local function isStarterOption(configs, configId)
@@ -124,8 +144,14 @@ local function failure(message)
   return false
 end
 
+local function saveCareer(candidate, current)
+  local ok = store.save(candidate, current)
+  Diagnostics.record("career.save", ok and "ok" or "failed")
+  return ok
+end
+
 local function commit(candidate, successMessage)
-  if not store.save(candidate, state) then
+  if not saveCareer(candidate, state) then
     return failure("Сохранение не подтверждено. Операция отменена, баланс и гараж не изменены.")
   end
   state = candidate
@@ -201,7 +227,7 @@ local function resumeRepairOnObject(vehicleId, objectId, bindingProof)
     local advanced = Career.startPhysicalRepair(candidate, token)
     if not advanced then return false end
   end
-  if not store.save(candidate, state) then
+  if not saveCareer(candidate, state) then
     return failure("Не удалось сохранить связь незавершённого ремонта с новой игровой машиной. Баланс не изменён.")
   end
   state = candidate
@@ -223,6 +249,55 @@ function M.requestSnapshot()
   local configs, catalogError = getCatalog()
   publish(configs, catalogError)
   return true
+end
+
+function M.exportDiagnostics()
+  loadCareer()
+  local counts = { total = 0, owned = 0, forSale = 0, sold = 0 }
+  if state and type(state.vehicles) == "table" then
+    for _, vehicle in ipairs(state.vehicles) do
+      counts.total = counts.total + 1
+      if vehicle.status == "owned" then counts.owned = counts.owned + 1
+      elseif vehicle.status == "for_sale" then counts.forSale = counts.forSale + 1
+      elseif vehicle.status == "sold" then counts.sold = counts.sold + 1 end
+    end
+  end
+  local context = {
+    modVersion = "0.0.1",
+    runtimeGeneration = tonumber(M.state and M.state.runtimeGeneration) or 0,
+    catalog = {
+      status = lastCatalogStatus,
+      modelCount = lastCatalogModelCount,
+      configurationCount = lastCatalogConfigCount
+    },
+    career = {
+      status = loadError and "error" or (state and "active" or "new"),
+      schema = state and state.schema or nil,
+      day = state and state.day or nil,
+      balance = state and state.money or nil,
+      vehicles = counts,
+      pendingStore = state and state.pendingStore ~= nil or false,
+      pendingRepairPhase = state and state.pendingRepair and state.pendingRepair.phase or nil
+    },
+    apiAvailability = {
+      catalog = type(core_vehicles) == "table" and type(core_vehicles.getModelList) == "function"
+        and type(core_vehicles.getConfigList) == "function",
+      spawn = type(core_vehicles) == "table" and type(core_vehicles.spawnNewVehicle) == "function",
+      sceneTreeNameLookup = type(scenetree) == "table" and type(scenetree.findObject) == "function",
+      jsonWriter = type(jsonWriteFile) == "function",
+      jsonReader = type(jsonReadFile) == "function"
+    }
+  }
+  local ok, pathOrError = Diagnostics.export(context)
+  local hooks = rawget(_G, "guihooks")
+  if type(hooks) == "table" and type(hooks.trigger) == "function" then
+    pcall(hooks.trigger, "PerekupDiagnosticsExported", {
+      success = ok == true,
+      path = ok and pathOrError or nil,
+      message = ok and "Файл создан." or pathOrError
+    })
+  end
+  return ok, pathOrError
 end
 
 function M.startCareer(configId)
@@ -262,9 +337,11 @@ function M.startCareer(configId)
 end
 
 function M.buyListing(listingId)
-  return mutate(function(candidate)
+  local ok = mutate(function(candidate)
     return Career.buy(candidate, listingId)
   end, "Автомобиль куплен и добавлен в гараж.")
+  if ok then Diagnostics.record("vehicle.purchase", "ok") end
+  return ok
 end
 
 function M.repairVehicle(vehicleId)
@@ -294,10 +371,11 @@ function M.repairVehicle(vehicleId)
   local started, tokenOrError = Career.beginPhysicalRepair(
     candidate, vehicleId, configSnapshot, preStateFile, postStateFile)
   if not started then return failure(tokenOrError) end
-  if not store.save(candidate, state) then
+  if not saveCareer(candidate, state) then
     return failure("Не удалось сохранить резерв операции. Ремонт не запущен.")
   end
   state = candidate
+  Diagnostics.record("repair.started", "ok")
   pendingRepairStartedAt = os.clock()
   lastRepairAck = nil
   repairAckRetryAt = nil
@@ -325,9 +403,11 @@ function M.sellVehicle(vehicleId)
   if World.isInWorld(vehicleId) then
     return failure("Сначала верните машину в гараж; находящийся в мире автомобиль продать нельзя.")
   end
-  return mutate(function(candidate)
+  local ok = mutate(function(candidate)
     return Career.sell(candidate, vehicleId)
   end, "Продажа записана. Баланс обновлён.")
+  if ok then Diagnostics.record("vehicle.sale", "ok") end
+  return ok
 end
 
 function M.retrieveVehicle(vehicleId)
@@ -362,6 +442,7 @@ function M.retrieveVehicle(vehicleId)
   end
   local spawned, spawnResult, restoreToken, bindingProof = World.spawn(vehicleId, config, configSnapshot, stateFile)
   if not spawned then return failure(spawnResult) end
+  Diagnostics.record("vehicle.retrieve", "ok")
   local spawnedObjectId = tonumber(spawnResult)
   if repairResume and not restoreToken then
     if not resumeRepairOnObject(vehicleId, spawnedObjectId, bindingProof) then return true end
@@ -403,10 +484,11 @@ function M.returnVehicle(vehicleId)
   local candidate = Career.copy(state)
   local started, tokenOrError = Career.beginVehicleStore(candidate, vehicleId, configSnapshot, stateFile)
   if not started then return failure(tokenOrError) end
-  if not store.save(candidate, state) then
+  if not saveCareer(candidate, state) then
     return failure("Не удалось сохранить резерв операции. Игровой объект оставлен в мире.")
   end
   state = candidate
+  Diagnostics.record("vehicle.store.started", "ok")
   pendingStoreStartedAt = os.clock()
   lastStoreAck = nil
   storeAckRetryAt = nil
@@ -473,9 +555,10 @@ local function finalizeStore(token)
   end
   local message = hadConfirmedBinding
     and "Проверенный checkpoint сохранён; подтверждённый объект этой сессии возвращён в гараж."
-    or "Проверенный checkpoint сохранён в карьеру. Объект прошлой сессии не тронут; удалите возможную старую машину вручную перед повторным выводом."
+    or "Проверенный checkpoint сохранён в карьеру. Текущий объект не был подтверждён и оставлен без изменений; проверьте игровой мир перед новым выводом."
   local saved = commit(candidate, message)
   if saved then
+    Diagnostics.record("vehicle.store.completed", "ok")
     clearStoreRuntime()
   else
     lastStoreAck = { token = token }
@@ -516,6 +599,7 @@ local function finalizeRepair(token)
   end
   local saved = commit(candidate, "Физический reset и сохранённое состояние подтверждены; списана одна стоимость ремонта.")
   if saved then
+    Diagnostics.record("repair.completed", "ok")
     clearRepairRuntime()
   else
     lastRepairAck = { token = token, succeeded = true }
@@ -547,7 +631,10 @@ function M.onVehicleStateSaved(token, objectId, kind, succeeded, bindingProof)
 
   if kind == "store" and type(state.pendingStore) == "table" and state.pendingStore.token == token then
     local pending = state.pendingStore
-    if not World.isCurrentOperation(pending.vehicleId, id, bindingProof, token, "store") then return false end
+    if not World.isCurrentOperation(pending.vehicleId, id, bindingProof, token, "store") then
+      Diagnostics.record("vehicle.store.callback", "unverified")
+      return false
+    end
     local vehicle = Garage.findById(state.vehicles, pending.vehicleId)
     if vehicle and World.validateStateFile(pending.stateFile, vehicle.modelKey, pending.configSnapshot) then
       return finalizeStore(token)
@@ -562,7 +649,10 @@ function M.onVehicleStateSaved(token, objectId, kind, succeeded, bindingProof)
   if kind == "repair_checkpoint" and type(state.pendingRepair) == "table"
     and state.pendingRepair.token == token and state.pendingRepair.phase == "checkpoint" then
     local pending = state.pendingRepair
-    if not World.isCurrentOperation(pending.vehicleId, id, bindingProof, token, "repair_checkpoint") then return false end
+    if not World.isCurrentOperation(pending.vehicleId, id, bindingProof, token, "repair_checkpoint") then
+      Diagnostics.record("repair.checkpoint.callback", "unverified")
+      return false
+    end
     local vehicle = Garage.findById(state.vehicles, pending.vehicleId)
     if vehicle and World.validateStateFile(pending.preStateFile, vehicle.modelKey, pending.configSnapshot) then
       return resumeRepairOnObject(pending.vehicleId, id, bindingProof)
@@ -576,10 +666,16 @@ function M.onVehicleStateSaved(token, objectId, kind, succeeded, bindingProof)
 end
 
 function M.onVehicleStateRestored(token, objectId, succeeded, bindingProof)
-  local restored, vehicleId = World.finishStateRestore(token, objectId, bindingProof, succeeded == true)
-  if not vehicleId then return false end
+  local restored, vehicleId, removed = World.finishStateRestore(token, objectId, bindingProof, succeeded == true)
+  if not vehicleId then
+    Diagnostics.record("vehicle.restore.callback", "unverified")
+    return false
+  end
   if not restored then
-    lastMessage = "Сохранённое состояние не удалось применить к подтверждённому объекту. Этот объект удалён только по текущей временной связи; запись карьеры сохранена."
+    Diagnostics.record("vehicle.restore", "failed")
+    lastMessage = removed
+      and "Сохранённое состояние не удалось применить. Подтверждённый объект этой сессии удалён; запись карьеры сохранена."
+      or "Сохранённое состояние не удалось применить. Объект не удалось безопасно удалить; запись карьеры сохранена, проверьте игровой мир."
     publish()
     return false
   end
@@ -587,15 +683,22 @@ function M.onVehicleStateRestored(token, objectId, succeeded, bindingProof)
     return resumeRepairOnObject(vehicleId, tonumber(objectId), bindingProof)
   end
   lastMessage = "Физическое состояние автомобиля восстановлено."
+  Diagnostics.record("vehicle.restore", "ok")
   publish()
   return true
 end
 
 function M.onRepairResult(token, objectId, succeeded, resultCode, bindingProof)
   loadCareer()
-  if not state or type(state.pendingRepair) ~= "table" or state.pendingRepair.token ~= token then return false end
+  if not state or type(state.pendingRepair) ~= "table" or state.pendingRepair.token ~= token then
+    Diagnostics.record("repair.callback", "unverified")
+    return false
+  end
   local pending = state.pendingRepair
-  if not World.isCurrentOperation(pending.vehicleId, tonumber(objectId), bindingProof, token, "repair") then return false end
+  if not World.isCurrentOperation(pending.vehicleId, tonumber(objectId), bindingProof, token, "repair") then
+    Diagnostics.record("repair.callback", "unverified")
+    return false
+  end
   if succeeded == true then return finalizeRepair(token) end
   if resultCode == "rejected" then return cancelRejectedRepair(token) end
   return false
@@ -604,6 +707,7 @@ end
 function M.onExtensionLoaded()
   startRuntimeGeneration()
   loadCareer()
+  Diagnostics.record("extension.loaded", "ok")
   if not state then
     publish()
     return

@@ -25,6 +25,7 @@ class PackageTests(unittest.TestCase):
                 "scripts/perekup/modScript.lua",
                 "lua/ge/extensions/perekup_core.lua",
                 "lua/ge/extensions/perekup/career.lua",
+                "lua/ge/extensions/perekup/diagnostics.lua",
                 "lua/ge/extensions/perekup/persistence.lua",
                 "lua/ge/extensions/perekup/listings.lua",
                 "lua/ge/extensions/perekup/garage.lua",
@@ -58,6 +59,22 @@ class PackageTests(unittest.TestCase):
             self.assertIn("scope.tr = function", script)
             self.assertIn("Русский", script)
             self.assertIn("English", script)
+
+    def test_world_binding_uses_a_runtime_name_not_lua_wrapper_equality(self) -> None:
+        with ZipFile(ARCHIVE) as archive:
+            world = archive.read("lua/ge/extensions/perekup/world.lua").decode("utf-8")
+            self.assertNotIn("rawequal", world)
+            self.assertIn('readMember(object, "setName")', world)
+            self.assertIn('readMember(tree, "findObject")', world)
+            self.assertIn("verifiedNamedObject", world)
+
+    def test_diagnostics_export_does_not_include_object_ids_or_configs(self) -> None:
+        with ZipFile(ARCHIVE) as archive:
+            diagnostics = archive.read("lua/ge/extensions/perekup/diagnostics.lua").decode("utf-8")
+            core = archive.read("lua/ge/extensions/perekup_core.lua").decode("utf-8")
+            self.assertIn('"settings/perekup_diagnostics.json"', diagnostics)
+            self.assertIn("function M.exportDiagnostics()", core)
+            self.assertNotIn("objectId =", core[core.index("function M.exportDiagnostics()"):core.index("function M.startCareer")])
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ PACKAGE_ROOTS = ("lua", "scripts", "ui")
 EXPECTED_FILES = (
     "lua/ge/extensions/perekup_core.lua",
     "lua/ge/extensions/perekup/career.lua",
+    "lua/ge/extensions/perekup/diagnostics.lua",
     "lua/ge/extensions/perekup/economy.lua",
     "lua/ge/extensions/perekup/garage.lua",
     "lua/ge/extensions/perekup/listings.lua",

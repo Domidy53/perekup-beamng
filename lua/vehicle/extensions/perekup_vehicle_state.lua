@@ -7,6 +7,14 @@ local completedSaves = {}
 local completedRestores = {}
 local repairRetryElapsed = 0
 
+local function diagnostic(event, result, api)
+  local logger = rawget(_G, "log")
+  if type(logger) ~= "function" then return end
+  local level = result == "failed" and "E" or (result == "unavailable" and "W" or "I")
+  local suffix = type(api) == "string" and api:match("^[A-Za-z0-9_.:]+$") and " api=" .. api or ""
+  pcall(logger, level, "PEREKUP", event .. " result=" .. result .. suffix)
+end
+
 local function currentVehicleId()
   if obj == nil then return nil end
   local getter = obj.getID or obj.getId
@@ -83,6 +91,7 @@ local function reportGameEngine(functionName, token, objectId, kind, succeeded, 
       functionName, token, objectId, tostring(succeeded), bindingProof)
   end
   local ok, result = pcall(obj.queueGameEngineLua, obj, command)
+  if not ok or result == false then diagnostic("vehicle.callback", "failed", "obj.queueGameEngineLua") end
   return ok and result ~= false
 end
 
@@ -99,6 +108,7 @@ local function requestSave(path, token, kind, bindingProof)
     if safeToken(token) and objectId then
       reportGameEngine("onVehicleStateSaved", token, objectId, kind, false, nil, bindingProof)
     end
+    diagnostic("vehicle.state.save", "unavailable", "beamstate.save")
     return false
   end
 
@@ -106,6 +116,7 @@ local function requestSave(path, token, kind, bindingProof)
   local verified = savedOk and saveResult ~= false and readValidBeamstate(path) ~= nil
   if verified then completedSaves[key] = true end
   reportGameEngine("onVehicleStateSaved", token, objectId, kind, verified, nil, bindingProof)
+  diagnostic("vehicle.state.save", verified and "ok" or "failed", "beamstate.save")
   return verified
 end
 
@@ -126,25 +137,34 @@ function M.restoreState(path, token, bindingProof)
     if safeToken(token) and objectId then
       reportGameEngine("onVehicleStateRestored", token, objectId, nil, false, nil, bindingProof)
     end
+    diagnostic("vehicle.state.restore", "unavailable", "beamstate.load")
     return false
   end
   local loadedOk, loadResult = pcall(beamstate.load, path)
   local loaded = loadedOk and loadResult ~= false
   if loaded then completedRestores[key] = true end
   reportGameEngine("onVehicleStateRestored", token, objectId, nil, loaded, nil, bindingProof)
+  diagnostic("vehicle.state.restore", loaded and "ok" or "failed", "beamstate.load")
   return loaded
 end
 
 local function saveCompletedRepair()
   if not pendingRepair or not pendingRepair.resetDone then return false end
-  if type(beamstate) ~= "table" or type(beamstate.save) ~= "function" then return false end
+  if type(beamstate) ~= "table" or type(beamstate.save) ~= "function" then
+    diagnostic("repair.checkpoint", "unavailable", "beamstate.save")
+    return false
+  end
   local ok, saveResult = pcall(beamstate.save, pendingRepair.postStateFile)
-  if not ok or saveResult == false or not readValidBeamstate(pendingRepair.postStateFile) then return false end
+  if not ok or saveResult == false or not readValidBeamstate(pendingRepair.postStateFile) then
+    diagnostic("repair.checkpoint", "failed", "beamstate.save")
+    return false
+  end
   local finished = pendingRepair
   pendingRepair = nil
   completedRepair = finished
   repairRetryElapsed = 0
   reportGameEngine("onRepairResult", finished.token, finished.objectId, nil, true, "saved", finished.bindingProof)
+  diagnostic("repair.checkpoint", "ok", "beamstate.save")
   return true
 end
 
@@ -167,6 +187,7 @@ function M.requestRepair(token, postStateFile, bindingProof)
   if RESET_PHYSICS == nil or type(obj.requestReset) ~= "function"
     or type(beamstate) ~= "table" or type(beamstate.save) ~= "function" then
     reportGameEngine("onRepairResult", token, objectId, nil, false, "rejected", bindingProof)
+    diagnostic("repair.reset", "unavailable", "obj.requestReset")
     return false
   end
 
@@ -182,11 +203,13 @@ function M.requestRepair(token, postStateFile, bindingProof)
   if not ok or result == false then
     pendingRepair = nil
     reportGameEngine("onRepairResult", token, objectId, nil, false, "rejected", bindingProof)
+    diagnostic("repair.reset", "failed", "obj.requestReset")
     return false
   end
   if type(obj.resetBrokenFlexMesh) == "function" then
     pcall(obj.resetBrokenFlexMesh, obj)
   end
+  diagnostic("repair.reset", "started", "obj.requestReset")
   return true
 end
 
@@ -194,6 +217,7 @@ function M.onReset()
   if not pendingRepair or pendingRepair.objectId ~= currentVehicleId() then return end
   pendingRepair.resetDone = true
   repairRetryElapsed = 0
+  diagnostic("repair.reset", "confirmed", "onReset")
 end
 
 function M.updateGFX(dt)
@@ -205,4 +229,5 @@ function M.updateGFX(dt)
   end
 end
 
+diagnostic("vehicle.state.extension", "loaded")
 return M
