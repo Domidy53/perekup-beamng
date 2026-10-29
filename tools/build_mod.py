@@ -14,6 +14,7 @@ from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT / "ui" / "modules" / "apps" / "perekup"
 PACKAGE_ROOTS = ("lua", "scripts", "ui")
+TEXT_SUFFIXES = {".css", ".html", ".js", ".json", ".lua", ".md", ".txt"}
 EXPECTED_FILES = (
     "lua/ge/extensions/perekup_core.lua",
     "lua/ge/extensions/perekup/career.lua",
@@ -109,6 +110,14 @@ def collect_package_files() -> list[Path]:
     return ordered
 
 
+def package_bytes(path: Path) -> bytes:
+    """Normalize text payloads so Windows and Linux produce identical ZIPs."""
+    content = path.read_bytes()
+    if path.suffix.lower() in TEXT_SUFFIXES or path.name == "LICENSE":
+        return content.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return content
+
+
 def validate_sources(files: list[Path]) -> None:
     relative = {path.relative_to(ROOT).as_posix() for path in files}
     missing = [name for name in EXPECTED_FILES if name not in relative]
@@ -137,7 +146,7 @@ def build(output: Path) -> tuple[str, int]:
             info = ZipInfo(name, date_time=(2024, 1, 1, 0, 0, 0))
             info.compress_type = ZIP_DEFLATED
             info.external_attr = 0o100644 << 16
-            archive.writestr(info, path.read_bytes())
+            archive.writestr(info, package_bytes(path))
 
     with ZipFile(temp, "r") as archive:
         corrupt = archive.testzip()

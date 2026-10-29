@@ -18,6 +18,12 @@ class PackageTests(unittest.TestCase):
             self.assertEqual({name.split("/", 1)[0] for name in names}, {"lua", "scripts", "ui", "LICENSE"})
             self.assertTrue(all(not name.startswith(("vehicles/", "levels/", "art/")) for name in names))
 
+    def test_text_payloads_use_canonical_lf_line_endings(self) -> None:
+        with ZipFile(ARCHIVE) as archive:
+            for name in archive.namelist():
+                if name.lower().endswith((".css", ".html", ".js", ".json", ".lua", ".md", ".txt")) or name == "LICENSE":
+                    self.assertNotIn(b"\r", archive.read(name), f"non-canonical line endings in {name}")
+
     def test_zip_contains_real_core_ui_and_mod_loader(self) -> None:
         with ZipFile(ARCHIVE) as archive:
             names = set(archive.namelist())
